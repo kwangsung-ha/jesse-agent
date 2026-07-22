@@ -185,6 +185,7 @@ tubetalk/
 
 3. **CLI 명령어 구조 (Typer 기반 서브커맨드)**:
    - `tubetalk process <YouTube_URL>`: 영상 분석, 자막 추출, 비전 인덱싱 및 캐시 저장 후 요약 출력.
+   - `tubetalk status [video_id]`: 로컬 캐시 전체 목록 또는 특정 비디오의 인덱싱 캐시 정보 조회.
    - `tubetalk chat <video_id>`: 저장된 데이터 기반 터미널 대화형 Q&A 세션 실행.
    - `tubetalk summary <video_id>`: 보관된 영상 요약 및 타임스탬프 목차 즉시 재조회 (캐시 2초 이내 출력).
 
