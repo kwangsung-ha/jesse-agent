@@ -18,6 +18,10 @@ def test_settings_defaults():
     assert s.default_sample_interval_sec == 5.0
     assert s.vision_model == "gemini-2.5-flash"
     assert s.llm_model == "gemini-2.5-pro"
+    assert s.embedding_model == "gemini-embedding-2"
+    assert s.embedding_dimension == 768
+    assert s.transcript_chunk_max_seconds == 45.0
+    assert s.transcript_chunk_max_characters == 1200
     assert settings is not None
 
 

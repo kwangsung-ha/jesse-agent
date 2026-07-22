@@ -13,12 +13,12 @@
   - Pydantic Settings 기반 설정 및 로컬 데이터 경로 구조화 (`./data/`)
 
 ## Phase 1: 로컬 영속성 & 텍스트 자막 Ingestion 파이프라인
-- [i] **Task 01: 자막 파싱 & 캐시 수집기 및 CLI status 커맨드 (`pipeline/loader.py`, `cli/`)** `docs/tasks/01-loader-pipeline.md`
+- [x] **Task 01: 자막 파싱 & 캐시 수집기 및 CLI status 커맨드 (`pipeline/loader.py`, `cli/`)** `docs/tasks/01-loader-pipeline.md`
   - `youtube-transcript-api` 자막 추출기 및 `yt-dlp` 메타데이터 수집
   - JSON 캐시 관리자 (`core/cache.py`) 연동 및 로컬 캐싱 검증 (2초 이내 로딩)
   - `tubetalk status [video_id]` CLI 커맨드로 로컬 캐시 현황 조회 기능 구현
 
-- [ ] **Task 02: ChromaDB 텍스트 자막 Vector Store 구축 (`storage/vector_store.py`)**
+- [x] **Task 02: ChromaDB 텍스트 자막 Vector Store 구축 (`storage/vector_store.py`)**
   - ChromaDB Local Client 연동 및 `transcript_collection` 스키마 정의
   - 타임스탬프 메타데이터 포함 자막 청크 임베딩 저작
 

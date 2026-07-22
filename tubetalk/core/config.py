@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     default_sample_interval_sec: float = 5.0
     vision_model: str = "gemini-2.5-flash"
     llm_model: str = "gemini-2.5-pro"
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dimension: int = 768
+    transcript_chunk_max_seconds: float = 45.0
+    transcript_chunk_max_characters: int = 1200
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -35,8 +35,8 @@
 
 ## 3. 작업 체크리스트 (Checklist)
 
-- [ ] **Check 1.1**: `tubetalk/core/cache.py` 구현 (캐시 저장/로드, `list_cached_videos`, `get_video_status`) 및 유닛 테스트 작성
-- [ ] **Check 1.2**: `tubetalk/pipeline/loader.py` (URL video_id 파싱 & transcript/metadata 수집) 구현 및 Mock 유닛 테스트 작성
-- [ ] **Check 1.3**: Typer & Rich 기반 `tubetalk status [VIDEO_ID]` CLI 커맨드 구현 및 CLI 유닛 테스트 작성
-- [ ] **Check 1.4**: Typer & Rich 기반 `tubetalk process <YOUTUBE_URL>` 초기 ingestion 커맨드 구현 및 Mock 유닛 테스트 작성
-- [ ] **Check 1.5**: `poetry run poe check` (포맷팅, 린팅, 커버리지 90%+ 검증) 일괄 통과 확인
+- [x] **Check 1.1**: `tubetalk/core/cache.py` 구현 (캐시 저장/로드, `list_cached_videos`, `get_video_status`) 및 유닛 테스트 작성
+- [x] **Check 1.2**: `tubetalk/pipeline/loader.py` (URL video_id 파싱 & transcript/metadata 수집) 구현 및 Mock 유닛 테스트 작성
+- [x] **Check 1.3**: Typer & Rich 기반 `tubetalk status [VIDEO_ID]` CLI 커맨드 구현 및 CLI 유닛 테스트 작성
+- [x] **Check 1.4**: Typer & Rich 기반 `tubetalk process <YOUTUBE_URL>` 초기 ingestion 커맨드 구현 및 Mock 유닛 테스트 작성
+- [x] **Check 1.5**: `poetry run poe check` (포맷팅, 린팅, 커버리지 90%+ 검증) 일괄 통과 확인

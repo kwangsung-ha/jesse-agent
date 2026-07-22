@@ -1,5 +1,6 @@
 """Unit tests for LocalCacheManager."""
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -155,7 +156,94 @@ def test_get_video_status_full(tmp_path: Path) -> None:
     assert status["has_transcript"] is True
     assert status["has_vision_index"] is True
     assert status["transcript_segments"] == 3
+    assert status["transcript_index_state"] == "missing"
     assert status["cached_at"] is not None
+
+
+def test_get_video_status_includes_current_transcript_index(tmp_path: Path) -> None:
+    """Status should expose manifest metadata for a current text index."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    vdir = tmp_path / "vid_indexed"
+    vdir.mkdir()
+    transcript = [{"start_sec": 0, "text": "Hello"}]
+    (vdir / "transcript.json").write_text(json.dumps(transcript))
+    digest = hashlib.sha256(
+        json.dumps(
+            transcript,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    (vdir / "index_manifest.json").write_text(
+        json.dumps(
+            {
+                "transcript_sha256": digest,
+                "chunk_count": 1,
+                "embedding_model": "gemini-embedding-2",
+                "embedding_dimension": 768,
+                "indexed_at": "2026-07-23T00:00:00+00:00",
+            }
+        )
+    )
+
+    status = cache.get_video_status("vid_indexed")
+
+    assert status is not None
+    assert status["transcript_index_state"] == "current"
+    assert status["transcript_index_chunks"] == 1
+    assert status["transcript_index_model"] == "gemini-embedding-2"
+    assert status["transcript_index_dimension"] == 768
+    assert status["transcript_indexed_at"] == "2026-07-23T00:00:00+00:00"
+
+
+def test_get_video_status_marks_changed_transcript_index_stale(tmp_path: Path) -> None:
+    """A manifest for another transcript must not be shown as current."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    vdir = tmp_path / "vid_stale"
+    vdir.mkdir()
+    (vdir / "transcript.json").write_text(json.dumps([{"start_sec": 0, "text": "New"}]))
+    (vdir / "index_manifest.json").write_text(
+        json.dumps({"transcript_sha256": "outdated", "chunk_count": 2})
+    )
+
+    status = cache.get_video_status("vid_stale")
+
+    assert status is not None
+    assert status["transcript_index_state"] == "stale"
+    assert status["transcript_index_chunks"] == 2
+
+
+def test_get_video_status_marks_another_embedding_model_stale(tmp_path: Path) -> None:
+    """A manifest built with another vector space must be marked stale."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    vdir = tmp_path / "vid_old_model"
+    vdir.mkdir()
+    transcript = [{"start_sec": 0, "text": "Hello"}]
+    (vdir / "transcript.json").write_text(json.dumps(transcript))
+    digest = hashlib.sha256(
+        json.dumps(
+            transcript,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    (vdir / "index_manifest.json").write_text(
+        json.dumps(
+            {
+                "transcript_sha256": digest,
+                "chunk_count": 1,
+                "embedding_model": "gemini-embedding-001",
+                "embedding_dimension": 768,
+            }
+        )
+    )
+
+    status = cache.get_video_status("vid_old_model")
+
+    assert status is not None
+    assert status["transcript_index_state"] == "stale"
 
 
 def test_get_video_status_partial(tmp_path: Path) -> None:

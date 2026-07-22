@@ -1,0 +1,203 @@
+"""Unit tests for Gemini-backed local transcript vector storage."""
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+from tubetalk.storage.vector_store import (
+    CHUNK_POLICY_VERSION,
+    GeminiEmbeddingProvider,
+    TranscriptVectorStore,
+    chunk_transcript,
+    format_document,
+)
+
+
+class FakeEmbeddingProvider:
+    """Deterministic embedding provider used without an external API."""
+
+    model = "gemini-embedding-2"
+    dimension = 3
+
+    def __init__(self) -> None:
+        self.documents: list[str] = []
+
+    def embed_documents(self, documents: list[str]) -> list[list[float]]:
+        self.documents = documents
+        return [[float(index), 0.0, 1.0] for index in range(len(documents))]
+
+
+def _make_store(tmp_path: Path, mocker: Any) -> tuple[TranscriptVectorStore, Any, Any]:
+    """Create a store with its Chroma client replaced by a mock."""
+    collection = mocker.Mock()
+    collection.count.return_value = 0
+    client = mocker.Mock()
+    client.get_or_create_collection.return_value = collection
+    persistent_client = mocker.patch(
+        "tubetalk.storage.vector_store.chromadb.PersistentClient",
+        return_value=client,
+    )
+
+    store = TranscriptVectorStore(
+        "video123",
+        data_dir=tmp_path,
+        embedding_dimension=3,
+    )
+    persistent_client.assert_called_once_with(
+        path=str(tmp_path / "video123" / "chromadb")
+    )
+    client.get_or_create_collection.assert_called_once_with(
+        name="transcript_collection",
+        metadata={"video_id": "video123", "hnsw:space": "cosine"},
+        embedding_function=None,
+    )
+    return store, client, collection
+
+
+def test_creates_video_scoped_chroma_directory(tmp_path: Path, mocker: Any) -> None:
+    """The vector database path should live below a video's local cache."""
+    store, _, _ = _make_store(tmp_path, mocker)
+
+    assert store.path == tmp_path / "video123" / "chromadb"
+    assert store.path.is_dir()
+
+
+def test_chunk_transcript_splits_by_duration_and_preserves_boundaries() -> None:
+    """Chunks should stop before exceeding the configured duration."""
+    chunks = chunk_transcript(
+        [
+            {"start_sec": 0, "duration_sec": 20, "text": "One"},
+            {"start_sec": 20, "duration_sec": 20, "text": "Two"},
+            {"start_sec": 40, "duration_sec": 20, "text": "Three"},
+        ],
+        max_seconds=45,
+        max_characters=1200,
+    )
+
+    assert chunks[0].text == "One Two"
+    assert chunks[0].start_sec == 0.0
+    assert chunks[0].end_sec == 40.0
+    assert chunks[0].first_segment_index == 0
+    assert chunks[0].last_segment_index == 1
+    assert chunks[1].text == "Three"
+    assert chunks[1].start_sec == 40.0
+    assert chunks[1].end_sec == 60.0
+
+
+def test_chunk_transcript_splits_by_characters_without_overlap() -> None:
+    """Character limits should create separate, non-duplicated chunks."""
+    chunks = chunk_transcript(
+        [
+            {"start_sec": 0, "text": "alpha"},
+            {"start_sec": 1, "text": "bravo"},
+            {"start_sec": 2, "text": "charlie"},
+        ],
+        max_seconds=45,
+        max_characters=11,
+    )
+
+    assert [chunk.text for chunk in chunks] == ["alpha bravo", "charlie"]
+    assert [chunk.first_segment_index for chunk in chunks] == [0, 2]
+
+
+@pytest.mark.parametrize(
+    "segment, error",
+    [
+        ({"start_sec": 0, "text": ""}, "non-empty text"),
+        ({"start_sec": "0", "text": "Hello"}, "numeric start_sec"),
+        ({"start_sec": 0, "duration_sec": "2", "text": "Hello"}, "numeric"),
+    ],
+)
+def test_chunk_transcript_rejects_invalid_segments(
+    segment: dict[str, Any], error: str
+) -> None:
+    """Invalid source segments should never reach the embedding provider."""
+    with pytest.raises(ValueError, match=error):
+        chunk_transcript([segment])
+
+
+def test_gemini_provider_formats_query_and_validates_vector_dimension(
+    mocker: Any,
+) -> None:
+    """Gemini calls should use explicit 768-style dimension configuration."""
+    client = mocker.Mock()
+    client.models.embed_content.return_value = SimpleNamespace(
+        embeddings=[SimpleNamespace(values=[0.1, 0.2, 0.3])]
+    )
+    provider = GeminiEmbeddingProvider(
+        api_key="test-key",
+        dimension=3,
+        client=client,
+    )
+
+    assert provider.embed_query("When is the goal?") == [0.1, 0.2, 0.3]
+    _, kwargs = client.models.embed_content.call_args
+    assert kwargs["model"] == "gemini-embedding-2"
+    assert kwargs["contents"] == "task: question answering | query: When is the goal?"
+    assert kwargs["config"].output_dimensionality == 3
+
+
+def test_index_transcript_rebuilds_collection_and_writes_manifest(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """A successful index stores explicit vectors and a current manifest."""
+    store, client, collection = _make_store(tmp_path, mocker)
+    provider = FakeEmbeddingProvider()
+    segments = [
+        {"start_sec": 0, "duration_sec": 2.5, "text": "Hello"},
+        {"start_sec": 2.5, "duration_sec": 3, "text": "World"},
+    ]
+
+    assert store.index_transcript(segments, "Example video", provider) == 1
+    assert provider.documents == [format_document("Hello World", "Example video")]
+    client.delete_collection.assert_called_once_with(name="transcript_collection")
+    collection.upsert.assert_called_once_with(
+        ids=["video123:chunk:0"],
+        documents=["Hello World"],
+        embeddings=[[0.0, 0.0, 1.0]],
+        metadatas=[
+            {
+                "video_id": "video123",
+                "chunk_index": 0,
+                "start_sec": 0.0,
+                "end_sec": 5.5,
+                "first_segment_index": 0,
+                "last_segment_index": 1,
+                "embedding_model": "gemini-embedding-2",
+                "embedding_dimension": 3,
+            }
+        ],
+    )
+    manifest = json.loads(store.manifest_path.read_text())
+    assert manifest["embedding_model"] == "gemini-embedding-2"
+    assert manifest["chunk_policy_version"] == CHUNK_POLICY_VERSION
+    assert manifest["chunk_count"] == 1
+
+
+def test_needs_indexing_detects_current_and_stale_transcripts(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """The manifest fingerprint should skip only a matching complete index."""
+    store, _, collection = _make_store(tmp_path, mocker)
+    provider = FakeEmbeddingProvider()
+    segments = [{"start_sec": 0, "text": "Hello"}]
+
+    store.index_transcript(segments, "Example", provider)
+    collection.count.return_value = 1
+    assert store.needs_indexing(segments) is False
+    assert store.needs_indexing([{"start_sec": 0, "text": "Changed"}]) is True
+
+
+def test_index_transcript_rejects_provider_with_wrong_configuration(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """Vectors from another model or dimension cannot enter this collection."""
+    store, _, _ = _make_store(tmp_path, mocker)
+    provider = FakeEmbeddingProvider()
+    provider.dimension = 4
+
+    with pytest.raises(ValueError, match="settings do not match"):
+        store.index_transcript([{"start_sec": 0, "text": "Hello"}], "Example", provider)

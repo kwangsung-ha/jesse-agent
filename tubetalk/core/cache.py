@@ -1,5 +1,6 @@
 """Local cache manager for TubeTalk video data."""
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,6 +80,8 @@ class LocalCacheManager:
         has_transcript = (video_dir / "transcript.json").is_file()
         has_vision_index = (video_dir / "vision_index.json").is_file()
 
+        transcript_index = self._get_transcript_index_status(video_dir)
+
         title: Optional[str] = None
         duration: Optional[float] = None
         channel: Optional[str] = None
@@ -115,5 +118,57 @@ class LocalCacheManager:
             "has_transcript": has_transcript,
             "has_vision_index": has_vision_index,
             "transcript_segments": transcript_count,
+            **transcript_index,
             "cached_at": cached_at,
         }
+
+    def _get_transcript_index_status(self, video_dir: Path) -> dict[str, Any]:
+        """Return transcript index metadata without opening the Chroma database."""
+        manifest_path = video_dir / "index_manifest.json"
+        result: dict[str, Any] = {
+            "transcript_index_state": "missing",
+            "transcript_index_chunks": None,
+            "transcript_index_model": None,
+            "transcript_index_dimension": None,
+            "transcript_indexed_at": None,
+        }
+        if not manifest_path.is_file():
+            return result
+
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            if not isinstance(manifest, dict):
+                return {**result, "transcript_index_state": "invalid"}
+            chunks = manifest.get("chunk_count")
+            result.update(
+                {
+                    "transcript_index_chunks": chunks
+                    if isinstance(chunks, int)
+                    else None,
+                    "transcript_index_model": manifest.get("embedding_model"),
+                    "transcript_index_dimension": manifest.get("embedding_dimension"),
+                    "transcript_indexed_at": manifest.get("indexed_at"),
+                }
+            )
+            transcript_path = video_dir / "transcript.json"
+            if not transcript_path.is_file():
+                return {**result, "transcript_index_state": "stale"}
+            transcript = json.loads(transcript_path.read_text())
+            transcript_sha256 = hashlib.sha256(
+                json.dumps(
+                    transcript,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest()
+            if manifest.get("transcript_sha256") != transcript_sha256:
+                return {**result, "transcript_index_state": "stale"}
+            if (
+                manifest.get("embedding_model") != settings.embedding_model
+                or manifest.get("embedding_dimension") != settings.embedding_dimension
+            ):
+                return {**result, "transcript_index_state": "stale"}
+            return {**result, "transcript_index_state": "current"}
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            return {**result, "transcript_index_state": "invalid"}
