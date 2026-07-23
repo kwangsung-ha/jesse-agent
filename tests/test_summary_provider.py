@@ -54,9 +54,6 @@ def test_gemini_summary_provider_requests_structured_flash_lite_output(
     [
         "not json",
         json.dumps(
-            {"summary": "요약", "chapters": [{"start_sec": 30, "title": "초과"}]}
-        ),
-        json.dumps(
             {"summary": "요약", "chapters": [{"start_sec": True, "title": "오류"}]}
         ),
     ],
@@ -71,6 +68,50 @@ def test_gemini_summary_provider_rejects_invalid_responses(
 
     with pytest.raises(SummaryProviderError, match="Invalid Gemini summary response"):
         provider.generate_summary(_transcript(), title="예시 영상", language="ko")
+
+
+def test_gemini_summary_provider_retries_out_of_range_chapter(
+    mocker: Any,
+) -> None:
+    """A timestamp beyond the source duration gets one corrective retry."""
+    client = mocker.Mock()
+    invalid_response = mocker.Mock(
+        text=json.dumps(
+            {"summary": "요약", "chapters": [{"start_sec": 30, "title": "초과"}]}
+        )
+    )
+    corrected_response = mocker.Mock(
+        text=json.dumps(
+            {"summary": "요약", "chapters": [{"start_sec": 10, "title": "수정"}]}
+        )
+    )
+    client.models.generate_content.side_effect = [invalid_response, corrected_response]
+    provider = GeminiSummaryProvider(api_key="key", client=client)
+
+    result = provider.generate_summary(_transcript(), title="예시 영상", language="ko")
+
+    assert result.chapters[0].title == "수정"
+    assert client.models.generate_content.call_count == 2
+    correction = client.models.generate_content.call_args_list[1].kwargs["contents"]
+    assert "outside the valid range 0.0 through 25.000" in correction
+
+
+def test_gemini_summary_provider_reports_range_when_correction_fails(
+    mocker: Any,
+) -> None:
+    """A second invalid response preserves the exact diagnostic for users."""
+    client = mocker.Mock()
+    response = mocker.Mock(
+        text=json.dumps(
+            {"summary": "요약", "chapters": [{"start_sec": 30, "title": "초과"}]}
+        )
+    )
+    client.models.generate_content.return_value = response
+    provider = GeminiSummaryProvider(api_key="key", client=client)
+
+    with pytest.raises(SummaryProviderError, match="30.000.*25.000"):
+        provider.generate_summary(_transcript(), title="예시 영상", language="ko")
+    assert client.models.generate_content.call_count == 2
 
 
 def test_gemini_summary_provider_converts_api_errors(mocker: Any) -> None:

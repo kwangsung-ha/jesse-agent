@@ -5,17 +5,30 @@ from typing import Any
 from typer.testing import CliRunner
 
 from tubetalk.cli.main import app
+from tubetalk.domain.summary import Chapter, VideoSummary
 from tubetalk.services.video_service import (
     IndexingResult,
     InvalidVideoUrlError,
     ProcessResult,
+    SummaryGenerationError,
     SummaryResult,
+    SummaryUnavailableError,
     VideoIngestionError,
     VideoNotFoundError,
     VideoStatus,
 )
 
 runner = CliRunner()
+
+
+def _summary() -> VideoSummary:
+    return VideoSummary(
+        text="영상의 핵심 내용을 요약합니다.",
+        chapters=(
+            Chapter(start_sec=0, title="소개"),
+            Chapter(start_sec=65, title="핵심"),
+        ),
+    )
 
 
 def _status(video_id: str = "vid_a") -> VideoStatus:
@@ -99,7 +112,7 @@ def test_process_renders_cache_miss_and_index_result(mocker: Any) -> None:
         cache_hit=False,
         transcript_segments=1,
         indexing=IndexingResult(state="indexed", chunk_count=1),
-        summary=SummaryResult(state="generated"),
+        summary=SummaryResult(state="generated", summary=_summary()),
     )
     service.get_status.return_value = _status("dQw4w9WgXcQ")
 
@@ -108,6 +121,8 @@ def test_process_renders_cache_miss_and_index_result(mocker: Any) -> None:
     assert result.exit_code == 0
     assert "Saved 1 transcript segments" in result.output
     assert "Indexed 1 transcript chunks" in result.output
+    assert "영상의 핵심 내용을 요약합니다" in result.output
+    assert "01:05" in result.output
     service.process.assert_called_once_with("https://youtu.be/dQw4w9WgXcQ")
 
 
@@ -144,3 +159,78 @@ def test_process_maps_service_errors_to_existing_exit_codes(mocker: Any) -> None
     assert "Cannot extract video_id" in invalid_result.output
     assert failed_result.exit_code == 1
     assert "Failed to process video" in failed_result.output
+
+
+def test_summary_displays_current_cache_or_generates_when_requested(
+    mocker: Any,
+) -> None:
+    """The CLI renders service summaries and forwards the generation flag."""
+    service = _mock_service(mocker)
+    service.get_summary.return_value = SummaryResult(
+        state="current", summary=_summary()
+    )
+
+    current_result = runner.invoke(app, ["summary", "vid_a"])
+
+    service.get_summary.return_value = SummaryResult(
+        state="generated", summary=_summary()
+    )
+    generated_result = runner.invoke(app, ["summary", "vid_a", "--generate"])
+
+    assert current_result.exit_code == 0
+    assert "영상의 핵심 내용을 요약합니다" in current_result.output
+    assert "01:05" in current_result.output
+    service.get_summary.assert_called_with("vid_a", generate=True)
+    assert generated_result.exit_code == 0
+    assert "Generated transcript summary" in generated_result.output
+
+
+def test_summary_without_video_id_prompts_from_cached_list(mocker: Any) -> None:
+    """The interactive form uses a numbered cache list instead of opaque IDs."""
+    service = _mock_service(mocker)
+    service.list_statuses.return_value = [_status("vid_a"), _status("vid_b")]
+    service.get_summary.return_value = SummaryResult(
+        state="current", summary=_summary()
+    )
+
+    result = runner.invoke(app, ["summary"], input="2\n")
+
+    assert result.exit_code == 0
+    assert "Select a Cached Video" in result.output
+    assert "Alpha Video" in result.output
+    assert "Select a video number" in result.output
+    service.get_summary.assert_called_once_with("vid_b", generate=False)
+
+
+def test_summary_without_video_id_handles_empty_and_invalid_selections(
+    mocker: Any,
+) -> None:
+    """The selection prompt gives clear errors for unavailable or invalid choices."""
+    service = _mock_service(mocker)
+    service.list_statuses.return_value = []
+
+    empty_result = runner.invoke(app, ["summary"])
+
+    service.list_statuses.return_value = [_status()]
+    invalid_result = runner.invoke(app, ["summary"], input="9\n")
+
+    assert empty_result.exit_code == 1
+    assert "No cached videos found" in empty_result.output
+    assert invalid_result.exit_code == 2
+    assert "displayed list" in invalid_result.output
+
+
+def test_summary_maps_unavailable_and_generation_errors(mocker: Any) -> None:
+    """Summary cache and provider failures are user-facing command errors."""
+    service = _mock_service(mocker)
+    service.get_summary.side_effect = SummaryUnavailableError("Run --generate")
+
+    unavailable_result = runner.invoke(app, ["summary", "vid_a"])
+
+    service.get_summary.side_effect = SummaryGenerationError("Gemini unavailable")
+    failed_result = runner.invoke(app, ["summary", "vid_a", "--generate"])
+
+    assert unavailable_result.exit_code == 1
+    assert "Run --generate" in unavailable_result.output
+    assert failed_result.exit_code == 1
+    assert "Gemini unavailable" in failed_result.output

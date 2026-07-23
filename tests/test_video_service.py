@@ -19,6 +19,8 @@ from tubetalk.ports.summary import SummaryProviderError
 from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
 from tubetalk.services.video_service import (
     InvalidVideoUrlError,
+    SummaryGenerationError,
+    SummaryUnavailableError,
     VideoIngestionError,
     VideoNotFoundError,
     VideoService,
@@ -156,6 +158,39 @@ def test_process_keeps_cache_when_summary_generation_fails(
     assert result.summary.warning == "Gemini unavailable"
     assert LocalCacheManager(data_dir=tmp_path).has_cache("dQw4w9WgXcQ") is True
     assert not (tmp_path / "dQw4w9WgXcQ" / "summary.json").exists()
+
+
+def test_get_summary_requires_generate_for_missing_cache(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """The summary use case does not call Gemini without explicit permission."""
+    service, _, _, _, summary_provider_factory = _service(tmp_path, mocker)
+    cache = LocalCacheManager(data_dir=tmp_path)
+    cache.save_json("video123", "metadata.json", {"title": "Example"})
+    cache.save_json("video123", "transcript.json", [{"start_sec": 0, "text": "Hi"}])
+
+    with pytest.raises(SummaryUnavailableError, match="--generate"):
+        service.get_summary("video123")
+
+    result = service.get_summary("video123", generate=True)
+
+    assert result.state == "generated"
+    assert result.summary is not None
+    summary_provider_factory.assert_called_once_with()
+
+
+def test_get_summary_maps_generation_warning_to_service_error(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """Explicit generation exposes provider failures to the CLI."""
+    service, _, _, _, summary_provider_factory = _service(tmp_path, mocker)
+    cache = LocalCacheManager(data_dir=tmp_path)
+    cache.save_json("video123", "metadata.json", {"title": "Example"})
+    cache.save_json("video123", "transcript.json", [{"start_sec": 0, "text": "Hi"}])
+    summary_provider_factory.side_effect = SummaryProviderError("Gemini unavailable")
+
+    with pytest.raises(SummaryGenerationError, match="Gemini unavailable"):
+        service.get_summary("video123", generate=True)
 
 
 def test_process_keeps_cache_when_indexing_fails(tmp_path: Path, mocker: Any) -> None:

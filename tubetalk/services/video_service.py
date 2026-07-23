@@ -43,6 +43,14 @@ class VideoIngestionError(VideoServiceError):
     """Raised when metadata or transcript collection fails."""
 
 
+class SummaryUnavailableError(VideoServiceError):
+    """Raised when a requested summary is absent or stale without generation."""
+
+
+class SummaryGenerationError(VideoServiceError):
+    """Raised when an explicitly requested summary cannot be generated."""
+
+
 @dataclass(frozen=True)
 class IndexingResult:
     """Outcome of checking or updating a transcript vector index."""
@@ -155,6 +163,30 @@ class VideoService:
         if status is None:
             raise VideoNotFoundError(f"Video '{video_id}' not found in local cache.")
         return self._video_status(status)
+
+    def get_summary(self, video_id: str, *, generate: bool = False) -> SummaryResult:
+        """Return a current cached summary or explicitly generate one when allowed."""
+        if not self._cache.has_cache(video_id):
+            raise VideoNotFoundError(f"Video '{video_id}' not found in local cache.")
+        metadata, transcript = self._load_cached_resources(video_id)
+        status = self._cache.get_summary_status(
+            video_id,
+            transcript,
+            model=self._summary_model,
+            prompt_version=self._summary_prompt_version,
+            language=self._summary_language,
+        )
+        if status.state == "current" and status.entry is not None:
+            return SummaryResult(state="current", summary=status.entry.summary)
+        if not generate:
+            raise SummaryUnavailableError(
+                f"Summary for '{video_id}' is {status.state}. "
+                f"Run 'tubetalk summary {video_id} --generate' to create it."
+            )
+        result = self._sync_summary(video_id, metadata, transcript)
+        if result.state == "warning":
+            raise SummaryGenerationError(result.warning or "Failed to generate summary")
+        return result
 
     def _video_status(self, status: VideoStatus) -> VideoStatus:
         video_id = status.video_id

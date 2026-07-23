@@ -22,7 +22,7 @@
   - ChromaDB Local Client 연동 및 `transcript_collection` 스키마 정의
   - 타임스탬프 메타데이터 포함 자막 청크 임베딩 저작
 
-- [ ] **Task 03: 자막 기반 종합 요약 & 타임스탬프 목차 파이프라인**
+- [x] **Task 03: 자막 기반 종합 요약 & 타임스탬프 목차 파이프라인**
   - Gemini 2.5 Pro 기반 요약 & 타임스탬프 목차 프롬프트 엔지니어링
 
 ## Phase 2: Vision Scene Indexing 파이프라인

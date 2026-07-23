@@ -17,6 +17,8 @@ when its transcript or generation settings change.
   stale cache.
 - `status` always exposes summary freshness and its available generation
   metadata alongside the other cached video artefacts.
+- `summary` without a video ID presents an interactive numbered cache list so
+  users can select a video without typing its opaque ID.
 
 ## Checklist
 
@@ -26,7 +28,7 @@ when its transcript or generation settings change.
   production wiring, and mocked unit tests.
 - [x] **Check 3.3**: Synchronize summaries from the video service and preserve
   cached resources when generation fails.
-- [ ] **Check 3.4**: Add the `summary` CLI command and process rendering with
+- [x] **Check 3.4**: Add the `summary` CLI command and process rendering with
   unit tests.
-- [ ] **Check 3.5**: Update documentation and roadmap after the feature is
+- [x] **Check 3.5**: Update documentation and roadmap after the feature is
   complete.

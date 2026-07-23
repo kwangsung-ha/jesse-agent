@@ -37,8 +37,25 @@ class GeminiSummaryProvider:
     ) -> VideoSummary:
         """Generate and validate a structured summary from the transcript."""
         prompt, last_timestamp = _summary_prompt(transcript, title, language)
+        response = self._generate_content(prompt)
         try:
-            response = self._client.models.generate_content(
+            return _parse_response(response, last_timestamp)
+        except ChapterTimestampOutOfRangeError as error:
+            corrected_response = self._generate_content(
+                _correction_prompt(prompt, error)
+            )
+            try:
+                return _parse_response(corrected_response, last_timestamp)
+            except ChapterTimestampOutOfRangeError as corrected_error:
+                raise SummaryProviderError(
+                    "Gemini returned an out-of-range chapter timestamp after "
+                    f"correction: {corrected_error}"
+                ) from corrected_error
+
+    def _generate_content(self, prompt: str) -> Any:
+        """Request one structured response from Gemini."""
+        try:
+            return self._client.models.generate_content(
                 model=self.model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
@@ -65,7 +82,6 @@ class GeminiSummaryProvider:
             )
         except (APIError, HTTPError) as error:
             raise SummaryProviderError(str(error)) from error
-        return _parse_response(response, last_timestamp)
 
 
 def _summary_prompt(
@@ -101,11 +117,23 @@ def _summary_prompt(
         "Summarize the following YouTube transcript. Use only facts supported by "
         "the transcript. Return JSON with a 3-5 sentence `summary` and a "
         "chronological `chapters` array. Every chapter needs a `start_sec` "
-        "timestamp from the transcript and a concise `title`. "
+        "timestamp from the transcript and a concise `title`. The only valid "
+        f"range for every start_sec is 0.0 through {last_timestamp:.3f}; do not "
+        "invent or round timestamps beyond that range. "
         f"Write all text in {language}.\n\n"
         f"Video title: {title}\n\nTranscript:\n" + "\n".join(lines)
     )
     return prompt, last_timestamp
+
+
+def _correction_prompt(prompt: str, error: "ChapterTimestampOutOfRangeError") -> str:
+    """Request a complete corrected response after timestamp validation fails."""
+    return (
+        f"{prompt}\n\nValidation feedback: a chapter start_sec of "
+        f"{error.start_sec:.3f} was outside the valid range 0.0 through "
+        f"{error.last_timestamp:.3f}. Return a complete corrected JSON response "
+        "with every chapter timestamp inside that range."
+    )
 
 
 def _parse_response(response: Any, last_timestamp: float) -> VideoSummary:
@@ -120,6 +148,8 @@ def _parse_response(response: Any, last_timestamp: float) -> VideoSummary:
             _chapter_from_data(chapter, last_timestamp) for chapter in chapters_data
         )
         return VideoSummary(text=summary, chapters=chapters)
+    except ChapterTimestampOutOfRangeError:
+        raise
     except (
         AttributeError,
         KeyError,
@@ -140,11 +170,24 @@ def _chapter_from_data(data: Any, last_timestamp: float) -> Chapter:
     title = data.get("title")
     if not isinstance(start_sec, (int, float)) or isinstance(start_sec, bool):
         raise ValueError("Chapter start_sec must be numeric")
-    if float(start_sec) > last_timestamp:
-        raise ValueError("Chapter start_sec exceeds transcript duration")
+    timestamp = float(start_sec)
+    if timestamp < 0 or timestamp > last_timestamp:
+        raise ChapterTimestampOutOfRangeError(timestamp, last_timestamp)
     if not isinstance(title, str):
         raise ValueError("Chapter title must be text")
-    return Chapter(start_sec=float(start_sec), title=title)
+    return Chapter(start_sec=timestamp, title=title)
+
+
+class ChapterTimestampOutOfRangeError(ValueError):
+    """A model-generated chapter timestamp does not cite the source transcript."""
+
+    def __init__(self, start_sec: float, last_timestamp: float) -> None:
+        self.start_sec = start_sec
+        self.last_timestamp = last_timestamp
+        super().__init__(
+            f"Chapter start_sec {start_sec:.3f} exceeds transcript duration "
+            f"{last_timestamp:.3f}"
+        )
 
 
 def _timestamp(seconds: float) -> str:
