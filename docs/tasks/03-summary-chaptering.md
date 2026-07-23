@@ -15,6 +15,8 @@ when its transcript or generation settings change.
 - `process` refreshes and renders missing or stale summaries. `summary` reads a
   current cache, while `summary --generate` explicitly generates a missing or
   stale cache.
+- `status` always exposes summary freshness and its available generation
+  metadata alongside the other cached video artefacts.
 
 ## Checklist
 
@@ -22,7 +24,7 @@ when its transcript or generation settings change.
   freshness validation, and unit tests.
 - [x] **Check 3.2**: Add the Gemini Flash-Lite summary port and adapter,
   production wiring, and mocked unit tests.
-- [ ] **Check 3.3**: Synchronize summaries from the video service and preserve
+- [x] **Check 3.3**: Synchronize summaries from the video service and preserve
   cached resources when generation fails.
 - [ ] **Check 3.4**: Add the `summary` CLI command and process rendering with
   unit tests.

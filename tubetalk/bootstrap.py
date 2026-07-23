@@ -24,6 +24,9 @@ def create_video_service(config: Settings = settings) -> VideoService:
         embedding_provider_factory=_embedding_provider_factory(config),
         transcript_index_repository_factory=_repository_factory(config),
         summary_provider_factory=_summary_provider_factory(config),
+        summary_model=config.summary_model,
+        summary_prompt_version=config.summary_prompt_version,
+        summary_language=config.summary_language,
     )
 
 

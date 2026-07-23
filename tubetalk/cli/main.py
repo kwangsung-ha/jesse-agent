@@ -96,17 +96,17 @@ def _show_all(videos: list[VideoStatus]) -> None:
     table = Table(title="🎬 Cached Videos", show_lines=True)
     table.add_column("Video ID", style="cyan", no_wrap=True)
     table.add_column("Title", style="green")
-    table.add_column("Channel", style="magenta")
     table.add_column("Segments", justify="right")
     table.add_column("Text Index", justify="center")
+    table.add_column("Summary", justify="center")
     table.add_column("Vision", justify="center")
     for video in videos:
         table.add_row(
             video.video_id,
             video.title or "—",
-            video.channel or "—",
             str(video.transcript_segments),
             _format_index_summary(video),
+            _format_summary_summary(video),
             "✅" if video.has_vision_index else "—",
         )
     console.print(table)
@@ -146,6 +146,17 @@ def _show_detail(status_info: VideoStatus) -> None:
             else "—",
         ),
         ("Transcript Indexed At", status_info.transcript_indexed_at or "—"),
+        ("Summary", _format_summary_state(status_info)),
+        (
+            "Summary Chapters",
+            str(status_info.summary_chapters)
+            if status_info.summary_chapters is not None
+            else "—",
+        ),
+        ("Summary Model", status_info.summary_model or "—"),
+        ("Summary Prompt", status_info.summary_prompt_version or "—"),
+        ("Summary Language", status_info.summary_language or "—"),
+        ("Summary Generated At", status_info.summary_generated_at or "—"),
         ("Vision Index", "✅" if status_info.has_vision_index else "❌"),
         ("Cached At", status_info.cached_at or "—"),
     ]
@@ -176,5 +187,31 @@ def _format_index_state(status_info: VideoStatus) -> str:
     if status_info.transcript_index_state == "stale":
         return "⚠️ Stale"
     if status_info.transcript_index_state == "invalid":
+        return "❌ Invalid"
+    return "❌ Missing"
+
+
+def _format_summary_summary(status_info: VideoStatus) -> str:
+    """Format summary state for the all-videos table."""
+    if status_info.summary_state == "current":
+        return (
+            f"✅ {status_info.summary_chapters}"
+            if status_info.summary_chapters is not None
+            else "✅"
+        )
+    if status_info.summary_state == "stale":
+        return "⚠️ stale"
+    if status_info.summary_state == "invalid":
+        return "❌ invalid"
+    return "—"
+
+
+def _format_summary_state(status_info: VideoStatus) -> str:
+    """Format summary state for the detailed status table."""
+    if status_info.summary_state == "current":
+        return "✅ Current"
+    if status_info.summary_state == "stale":
+        return "⚠️ Stale"
+    if status_info.summary_state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"

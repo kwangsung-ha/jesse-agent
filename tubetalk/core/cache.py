@@ -152,13 +152,26 @@ class LocalCacheManager:
                 pass
 
         transcript_count = 0
+        transcript: list[dict[str, Any]] = []
         if has_transcript:
             try:
-                transcript = json.loads((video_dir / "transcript.json").read_text())
-                if isinstance(transcript, list):
+                loaded_transcript = json.loads(
+                    (video_dir / "transcript.json").read_text()
+                )
+                if isinstance(loaded_transcript, list):
+                    transcript = loaded_transcript
                     transcript_count = len(transcript)
             except (json.JSONDecodeError, OSError):
                 pass
+
+        summary_status = self.get_summary_status(
+            video_id,
+            transcript,
+            model=settings.summary_model,
+            prompt_version=settings.summary_prompt_version,
+            language=settings.summary_language,
+        )
+        summary_entry = summary_status.entry
 
         cached_at: Optional[str] = None
         ref_file = video_dir / "metadata.json"
@@ -187,6 +200,28 @@ class LocalCacheManager:
             ),
             transcript_indexed_at=_optional_string(
                 transcript_index["transcript_indexed_at"]
+            ),
+            summary_state=summary_status.state,
+            summary_chapters=(
+                len(summary_entry.summary.chapters)
+                if summary_entry is not None
+                else None
+            ),
+            summary_model=(
+                summary_entry.manifest.model if summary_entry is not None else None
+            ),
+            summary_prompt_version=(
+                summary_entry.manifest.prompt_version
+                if summary_entry is not None
+                else None
+            ),
+            summary_language=(
+                summary_entry.manifest.language if summary_entry is not None else None
+            ),
+            summary_generated_at=(
+                summary_entry.manifest.generated_at
+                if summary_entry is not None
+                else None
             ),
             cached_at=cached_at,
         )

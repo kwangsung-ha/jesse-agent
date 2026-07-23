@@ -21,4 +21,10 @@ class VideoStatus:
     transcript_index_model: Optional[str]
     transcript_index_dimension: Optional[int]
     transcript_indexed_at: Optional[str]
+    summary_state: str
+    summary_chapters: Optional[int]
+    summary_model: Optional[str]
+    summary_prompt_version: Optional[str]
+    summary_language: Optional[str]
+    summary_generated_at: Optional[str]
     cached_at: Optional[str]

@@ -202,6 +202,25 @@ def test_summary_cache_reports_missing_and_invalid_files(tmp_path: Path) -> None
     assert invalid.state == "invalid"
 
 
+def test_video_status_includes_current_summary_metadata(tmp_path: Path) -> None:
+    """Status should expose summary freshness and generation provenance."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    transcript: list[dict[str, object]] = [
+        {"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}
+    ]
+    cache.save_json("vid1", "metadata.json", {"title": "예시"})
+    cache.save_json("vid1", "transcript.json", transcript)
+    cache.save_summary("vid1", _summary_entry(transcript))
+
+    status = cache.get_video_status("vid1")
+
+    assert status is not None
+    assert status.summary_state == "current"
+    assert status.summary_chapters == 2
+    assert status.summary_model == "gemini-3.5-flash-lite"
+    assert status.summary_language == "ko"
+
+
 # ------------------------------------------------------------------
 # list_cached_videos
 # ------------------------------------------------------------------
