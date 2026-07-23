@@ -5,6 +5,14 @@ import json
 from pathlib import Path
 
 from tubetalk.core.cache import LocalCacheManager
+from tubetalk.domain.summary import (
+    SUMMARY_SCHEMA_VERSION,
+    Chapter,
+    SummaryCacheEntry,
+    SummaryManifest,
+    VideoSummary,
+)
+from tubetalk.domain.transcript_index import transcript_sha256
 
 # ------------------------------------------------------------------
 # get_video_dir
@@ -76,6 +84,122 @@ def test_save_json_unicode(tmp_path: Path) -> None:
 
     loaded = cache.load_json("vid1", "transcript.json")
     assert loaded == data
+
+
+# ------------------------------------------------------------------
+# summary cache
+# ------------------------------------------------------------------
+
+
+def _summary_entry(transcript: list[dict[str, object]]) -> SummaryCacheEntry:
+    return SummaryCacheEntry(
+        summary=VideoSummary(
+            text="영상의 핵심 내용을 설명합니다.",
+            chapters=(
+                Chapter(start_sec=0, title="소개"),
+                Chapter(start_sec=30, title="주요 내용"),
+            ),
+        ),
+        manifest=SummaryManifest(
+            schema_version=SUMMARY_SCHEMA_VERSION,
+            transcript_sha256=transcript_sha256(transcript),
+            model="gemini-3.5-flash-lite",
+            prompt_version="summary-chapters-v1",
+            language="ko",
+            generated_at="2026-07-23T00:00:00+00:00",
+        ),
+    )
+
+
+def test_summary_cache_round_trip_and_current_status(tmp_path: Path) -> None:
+    """A summary with matching provenance should be reusable."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    transcript: list[dict[str, object]] = [
+        {"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}
+    ]
+    cache.save_summary("vid1", _summary_entry(transcript))
+
+    status = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+    )
+
+    assert status.state == "current"
+    assert status.entry is not None
+    assert status.entry.summary.chapters[1].title == "주요 내용"
+
+
+def test_summary_cache_marks_changed_inputs_stale(tmp_path: Path) -> None:
+    """Changing transcript or generation settings must invalidate a summary."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    transcript: list[dict[str, object]] = [
+        {"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}
+    ]
+    cache.save_summary("vid1", _summary_entry(transcript))
+
+    stale_by_transcript = cache.get_summary_status(
+        "vid1",
+        [{"start_sec": 0.0, "duration_sec": 10.0, "text": "변경된 자막"}],
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+    )
+    stale_by_model = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="other-model",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+    )
+    stale_by_prompt = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v2",
+        language="ko",
+    )
+    stale_by_language = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="en",
+    )
+
+    assert [
+        stale_by_transcript.state,
+        stale_by_model.state,
+        stale_by_prompt.state,
+        stale_by_language.state,
+    ] == ["stale", "stale", "stale", "stale"]
+
+
+def test_summary_cache_reports_missing_and_invalid_files(tmp_path: Path) -> None:
+    """Missing and malformed summary caches must be distinguished."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    transcript: list[dict[str, object]] = []
+
+    missing = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+    )
+    cache.save_json("vid1", "summary.json", {"summary": "broken"})
+    invalid = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+    )
+
+    assert missing.state == "missing"
+    assert invalid.state == "invalid"
 
 
 # ------------------------------------------------------------------

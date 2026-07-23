@@ -7,6 +7,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 from tubetalk.core.config import settings
+from tubetalk.domain.summary import (
+    SUMMARY_SCHEMA_VERSION,
+    Chapter,
+    SummaryCacheEntry,
+    SummaryCacheStatus,
+    SummaryManifest,
+    VideoSummary,
+)
+from tubetalk.domain.transcript_index import transcript_sha256
 from tubetalk.domain.video_status import VideoStatus
 
 
@@ -51,6 +60,53 @@ class LocalCacheManager:
         """Deserialize and return content of ``data/{video_id}/{filename}``."""
         filepath = self._data_dir / video_id / filename
         return json.loads(filepath.read_text())
+
+    def save_summary(self, video_id: str, entry: SummaryCacheEntry) -> None:
+        """Persist a generated summary and the inputs used to create it."""
+        self.save_json(
+            video_id,
+            "summary.json",
+            {
+                "summary": entry.summary.text,
+                "chapters": [
+                    {"start_sec": chapter.start_sec, "title": chapter.title}
+                    for chapter in entry.summary.chapters
+                ],
+                "schema_version": entry.manifest.schema_version,
+                "transcript_sha256": entry.manifest.transcript_sha256,
+                "model": entry.manifest.model,
+                "prompt_version": entry.manifest.prompt_version,
+                "language": entry.manifest.language,
+                "generated_at": entry.manifest.generated_at,
+            },
+        )
+
+    def get_summary_status(
+        self,
+        video_id: str,
+        transcript: list[dict[str, Any]],
+        *,
+        model: str,
+        prompt_version: str,
+        language: str,
+    ) -> SummaryCacheStatus:
+        """Return whether a cached summary matches its transcript and settings."""
+        summary_path = self._data_dir / video_id / "summary.json"
+        if not summary_path.is_file():
+            return SummaryCacheStatus(state="missing")
+        try:
+            entry = _summary_cache_entry(json.loads(summary_path.read_text()))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            return SummaryCacheStatus(state="invalid")
+        manifest = entry.manifest
+        if (
+            manifest.transcript_sha256 != transcript_sha256(transcript)
+            or manifest.model != model
+            or manifest.prompt_version != prompt_version
+            or manifest.language != language
+        ):
+            return SummaryCacheStatus(state="stale", entry=entry)
+        return SummaryCacheStatus(state="current", entry=entry)
 
     # ------------------------------------------------------------------
     # Listing / status helpers
@@ -193,3 +249,60 @@ def _optional_string(value: Any) -> Optional[str]:
 
 def _optional_int(value: Any) -> Optional[int]:
     return value if isinstance(value, int) else None
+
+
+def _summary_cache_entry(data: Any) -> SummaryCacheEntry:
+    """Parse and validate the persisted ``summary.json`` schema."""
+    if not isinstance(data, dict):
+        raise ValueError("Summary cache must be a JSON object")
+    chapters_data = data.get("chapters")
+    if not isinstance(chapters_data, list):
+        raise ValueError("Summary chapters must be a list")
+    chapters = tuple(
+        Chapter(
+            start_sec=_required_number(chapter, "start_sec"),
+            title=_required_text(chapter, "title"),
+        )
+        for chapter in chapters_data
+    )
+    manifest = SummaryManifest(
+        schema_version=_required_int(data, "schema_version"),
+        transcript_sha256=_required_text(data, "transcript_sha256"),
+        model=_required_text(data, "model"),
+        prompt_version=_required_text(data, "prompt_version"),
+        language=_required_text(data, "language"),
+        generated_at=_required_text(data, "generated_at"),
+    )
+    if manifest.schema_version != SUMMARY_SCHEMA_VERSION:
+        raise ValueError("Unsupported summary cache schema version")
+    return SummaryCacheEntry(
+        summary=VideoSummary(text=_required_text(data, "summary"), chapters=chapters),
+        manifest=manifest,
+    )
+
+
+def _required_text(data: Any, key: str) -> str:
+    if not isinstance(data, dict):
+        raise ValueError(f"{key} must belong to a JSON object")
+    value = data.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} must be non-empty text")
+    return value
+
+
+def _required_number(data: Any, key: str) -> float:
+    if not isinstance(data, dict):
+        raise ValueError(f"{key} must belong to a JSON object")
+    value = data.get(key)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError(f"{key} must be a number")
+    return float(value)
+
+
+def _required_int(data: Any, key: str) -> int:
+    if not isinstance(data, dict):
+        raise ValueError(f"{key} must belong to a JSON object")
+    value = data.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{key} must be an integer")
+    return value
