@@ -140,7 +140,7 @@ def test_gemini_provider_formats_query_and_validates_vector_dimension(
     assert provider.embed_query("When is the goal?") == [0.1, 0.2, 0.3]
     _, kwargs = client.models.embed_content.call_args
     assert kwargs["model"] == "gemini-embedding-2"
-    assert kwargs["contents"] == "task: question answering | query: When is the goal?"
+    assert kwargs["contents"] == "task: search result | query: When is the goal?"
     assert kwargs["config"].output_dimensionality == 3
 
 

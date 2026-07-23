@@ -30,8 +30,8 @@
   - 공개 YouTube URL 직접 분석 및 timestamped scene description 캐시
   - 로컬 프레임/모델 provider로 확장 가능한 vision interface
 
-- [ ] **Task 05: Gemini 2.5 Flash 비전 씬 디스크립터 생성기 (`pipeline/vision_indexer.py`)**
-  - 추출 키프레임 배치 전달 및 `vision_index.json` 구성
+- [i] **Task 05: Gemini Vision Scene Vector Index (`infrastructure/repositories/`)** `docs/tasks/05-vision-vector-index.md`
+  - `vision_index.json` 설명 텍스트의 Gemini Embedding 2 저작
   - ChromaDB `vision_collection` Vector 인덱싱
 
 ## Phase 3: Hybrid Retrieval & Interactive CLI Agent

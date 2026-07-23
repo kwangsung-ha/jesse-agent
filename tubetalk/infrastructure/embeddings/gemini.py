@@ -36,7 +36,7 @@ class GeminiEmbeddingProvider:
 
     def embed_query(self, query: str) -> list[float]:
         """Embed a future Q&A query in the matching retrieval space."""
-        return self._embed(f"task: question answering | query: {query}")
+        return self._embed(f"task: search result | query: {query}")
 
     def _embed(self, content: str) -> list[float]:
         try:
