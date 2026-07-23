@@ -25,7 +25,6 @@ google-genai = "*"
 chromadb = "*"
 yt-dlp = "*"
 youtube-transcript-api = "*"
-opencv-python = "*"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

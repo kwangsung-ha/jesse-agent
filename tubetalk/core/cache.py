@@ -17,6 +17,13 @@ from tubetalk.domain.summary import (
 )
 from tubetalk.domain.transcript_index import transcript_sha256
 from tubetalk.domain.video_status import VideoStatus
+from tubetalk.domain.vision import (
+    VISION_SCHEMA_VERSION,
+    VisionIndexEntry,
+    VisionIndexStatus,
+    VisionManifest,
+    VisionScene,
+)
 
 
 class LocalCacheManager:
@@ -107,6 +114,54 @@ class LocalCacheManager:
         ):
             return SummaryCacheStatus(state="stale", entry=entry)
         return SummaryCacheStatus(state="current", entry=entry)
+
+    def save_vision_index(self, video_id: str, entry: VisionIndexEntry) -> None:
+        """Persist generated visual scenes and their generation provenance."""
+        self.save_json(
+            video_id,
+            "vision_index.json",
+            {
+                "scenes": [
+                    {
+                        "start_sec": scene.start_sec,
+                        "end_sec": scene.end_sec,
+                        "visual_summary": scene.visual_summary,
+                        "detected_objects": list(scene.detected_objects),
+                    }
+                    for scene in entry.scenes
+                ],
+                "schema_version": entry.manifest.schema_version,
+                "source_url": entry.manifest.source_url,
+                "model": entry.manifest.model,
+                "prompt_version": entry.manifest.prompt_version,
+                "generated_at": entry.manifest.generated_at,
+            },
+        )
+
+    def get_vision_index_status(
+        self,
+        video_id: str,
+        *,
+        source_url: str,
+        model: str,
+        prompt_version: str,
+    ) -> VisionIndexStatus:
+        """Return whether a visual index matches its source and settings."""
+        vision_path = self._data_dir / video_id / "vision_index.json"
+        if not vision_path.is_file():
+            return VisionIndexStatus(state="missing")
+        try:
+            entry = _vision_index_entry(json.loads(vision_path.read_text()))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            return VisionIndexStatus(state="invalid")
+        manifest = entry.manifest
+        if (
+            manifest.source_url != source_url
+            or manifest.model != model
+            or manifest.prompt_version != prompt_version
+        ):
+            return VisionIndexStatus(state="stale", entry=entry)
+        return VisionIndexStatus(state="current", entry=entry)
 
     # ------------------------------------------------------------------
     # Listing / status helpers
@@ -316,6 +371,39 @@ def _summary_cache_entry(data: Any) -> SummaryCacheEntry:
     )
 
 
+def _vision_index_entry(data: Any) -> VisionIndexEntry:
+    """Parse and validate the persisted ``vision_index.json`` schema."""
+    if not isinstance(data, dict):
+        raise ValueError("Vision index cache must be a JSON object")
+    scenes_data = data.get("scenes")
+    if not isinstance(scenes_data, list):
+        raise ValueError("Vision scenes must be a list")
+    scenes = tuple(
+        VisionScene(
+            start_sec=_required_number(scene, "start_sec"),
+            end_sec=_required_number(scene, "end_sec"),
+            visual_summary=_required_text(scene, "visual_summary"),
+            detected_objects=_required_text_items(scene, "detected_objects"),
+        )
+        for scene in scenes_data
+    )
+    if any(
+        current.start_sec < previous.start_sec
+        for previous, current in zip(scenes, scenes[1:])
+    ):
+        raise ValueError("Vision scenes must be ordered by start_sec")
+    manifest = VisionManifest(
+        schema_version=_required_int(data, "schema_version"),
+        source_url=_required_text(data, "source_url"),
+        model=_required_text(data, "model"),
+        prompt_version=_required_text(data, "prompt_version"),
+        generated_at=_required_text(data, "generated_at"),
+    )
+    if manifest.schema_version != VISION_SCHEMA_VERSION:
+        raise ValueError("Unsupported vision cache schema version")
+    return VisionIndexEntry(scenes=scenes, manifest=manifest)
+
+
 def _required_text(data: Any, key: str) -> str:
     if not isinstance(data, dict):
         raise ValueError(f"{key} must belong to a JSON object")
@@ -332,6 +420,17 @@ def _required_number(data: Any, key: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{key} must be a number")
     return float(value)
+
+
+def _required_text_items(data: Any, key: str) -> tuple[str, ...]:
+    if not isinstance(data, dict):
+        raise ValueError(f"{key} must belong to a JSON object")
+    values = data.get(key)
+    if not isinstance(values, list) or not all(
+        isinstance(value, str) and value.strip() for value in values
+    ):
+        raise ValueError(f"{key} must be a list of non-empty text")
+    return tuple(values)
 
 
 def _required_int(data: Any, key: str) -> int:

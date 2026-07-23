@@ -26,9 +26,9 @@
   - Gemini 2.5 Pro 기반 요약 & 타임스탬프 목차 프롬프트 엔지니어링
 
 ## Phase 2: Vision Scene Indexing 파이프라인
-- [ ] **Task 04: OpenCV 기반 비디오 키프레임 추출 모듈 (`pipeline/media_processor.py`)**
-  - 5초 간격 키프레임 샘플링 엔진
-  - `--detect-scenes` 모드 (OpenCV 프레임 차분 알고리즘)
+- [i] **Task 04: Gemini 직접 비디오 씬 분석 기반 (`infrastructure/visions/`)** `docs/tasks/04-gemini-video-analysis.md`
+  - 공개 YouTube URL 직접 분석 및 timestamped scene description 캐시
+  - 로컬 프레임/모델 provider로 확장 가능한 vision interface
 
 - [ ] **Task 05: Gemini 2.5 Flash 비전 씬 디스크립터 생성기 (`pipeline/vision_indexer.py`)**
   - 추출 키프레임 배치 전달 및 `vision_index.json` 구성

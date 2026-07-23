@@ -18,8 +18,8 @@ def test_settings_defaults():
     """Verify default settings values and custom instantiation."""
     s = Settings(gemini_api_key="test-key")
     assert s.gemini_api_key == "test-key"
-    assert s.default_sample_interval_sec == 5.0
-    assert s.vision_model == "gemini-2.5-flash"
+    assert s.vision_model == "gemini-3.5-flash"
+    assert s.vision_prompt_version == "vision-scenes-v1"
     assert s.llm_model == "gemini-2.5-pro"
     assert s.summary_model == "gemini-3.5-flash-lite"
     assert s.summary_language == "ko"

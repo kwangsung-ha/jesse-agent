@@ -13,6 +13,12 @@ from tubetalk.domain.summary import (
     VideoSummary,
 )
 from tubetalk.domain.transcript_index import transcript_sha256
+from tubetalk.domain.vision import (
+    VISION_SCHEMA_VERSION,
+    VisionIndexEntry,
+    VisionManifest,
+    VisionScene,
+)
 
 # ------------------------------------------------------------------
 # get_video_dir
@@ -200,6 +206,39 @@ def test_summary_cache_reports_missing_and_invalid_files(tmp_path: Path) -> None
 
     assert missing.state == "missing"
     assert invalid.state == "invalid"
+
+
+def test_vision_index_cache_round_trip_and_freshness(tmp_path: Path) -> None:
+    """Vision cache reuse must be tied to its URL, model, and prompt version."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    entry = VisionIndexEntry(
+        scenes=(VisionScene(0, 5, "A presenter appears.", ("presenter",)),),
+        manifest=VisionManifest(
+            schema_version=VISION_SCHEMA_VERSION,
+            source_url="https://www.youtube.com/watch?v=vid1",
+            model="gemini-3.5-flash",
+            prompt_version="vision-scenes-v1",
+            generated_at="2026-07-24T00:00:00+00:00",
+        ),
+    )
+    cache.save_vision_index("vid1", entry)
+
+    current = cache.get_vision_index_status(
+        "vid1",
+        source_url="https://www.youtube.com/watch?v=vid1",
+        model="gemini-3.5-flash",
+        prompt_version="vision-scenes-v1",
+    )
+    stale = cache.get_vision_index_status(
+        "vid1",
+        source_url="https://www.youtube.com/watch?v=vid1",
+        model="gemini-2.5-flash",
+        prompt_version="vision-scenes-v1",
+    )
+
+    assert current.state == "current"
+    assert current.entry == entry
+    assert stale.state == "stale"
 
 
 def test_video_status_includes_current_summary_metadata(tmp_path: Path) -> None:

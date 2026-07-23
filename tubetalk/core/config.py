@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     data_dir: Path = Path("./data")
-    default_sample_interval_sec: float = 5.0
-    vision_model: str = "gemini-2.5-flash"
+    vision_model: str = "gemini-3.5-flash"
+    vision_prompt_version: str = "vision-scenes-v1"
     llm_model: str = "gemini-2.5-pro"
     summary_model: str = "gemini-3.5-flash-lite"
     summary_language: str = "ko"
