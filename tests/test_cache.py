@@ -112,8 +112,8 @@ def test_list_cached_videos_with_data(tmp_path: Path) -> None:
 
     results = cache.list_cached_videos()
     assert len(results) == 2
-    assert results[0]["video_id"] == "vid_a"
-    assert results[1]["video_id"] == "vid_b"
+    assert results[0].video_id == "vid_a"
+    assert results[1].video_id == "vid_b"
 
 
 # ------------------------------------------------------------------
@@ -148,16 +148,16 @@ def test_get_video_status_full(tmp_path: Path) -> None:
 
     status = cache.get_video_status("vid1")
     assert status is not None
-    assert status["video_id"] == "vid1"
-    assert status["title"] == "Test Video"
-    assert status["channel"] == "MyChannel"
-    assert status["duration"] == 180.0
-    assert status["has_metadata"] is True
-    assert status["has_transcript"] is True
-    assert status["has_vision_index"] is True
-    assert status["transcript_segments"] == 3
-    assert status["transcript_index_state"] == "missing"
-    assert status["cached_at"] is not None
+    assert status.video_id == "vid1"
+    assert status.title == "Test Video"
+    assert status.channel == "MyChannel"
+    assert status.duration == 180.0
+    assert status.has_metadata is True
+    assert status.has_transcript is True
+    assert status.has_vision_index is True
+    assert status.transcript_segments == 3
+    assert status.transcript_index_state == "missing"
+    assert status.cached_at is not None
 
 
 def test_get_video_status_includes_current_transcript_index(tmp_path: Path) -> None:
@@ -190,11 +190,11 @@ def test_get_video_status_includes_current_transcript_index(tmp_path: Path) -> N
     status = cache.get_video_status("vid_indexed")
 
     assert status is not None
-    assert status["transcript_index_state"] == "current"
-    assert status["transcript_index_chunks"] == 1
-    assert status["transcript_index_model"] == "gemini-embedding-2"
-    assert status["transcript_index_dimension"] == 768
-    assert status["transcript_indexed_at"] == "2026-07-23T00:00:00+00:00"
+    assert status.transcript_index_state == "current"
+    assert status.transcript_index_chunks == 1
+    assert status.transcript_index_model == "gemini-embedding-2"
+    assert status.transcript_index_dimension == 768
+    assert status.transcript_indexed_at == "2026-07-23T00:00:00+00:00"
 
 
 def test_get_video_status_marks_changed_transcript_index_stale(tmp_path: Path) -> None:
@@ -210,8 +210,8 @@ def test_get_video_status_marks_changed_transcript_index_stale(tmp_path: Path) -
     status = cache.get_video_status("vid_stale")
 
     assert status is not None
-    assert status["transcript_index_state"] == "stale"
-    assert status["transcript_index_chunks"] == 2
+    assert status.transcript_index_state == "stale"
+    assert status.transcript_index_chunks == 2
 
 
 def test_get_video_status_marks_another_embedding_model_stale(tmp_path: Path) -> None:
@@ -243,7 +243,7 @@ def test_get_video_status_marks_another_embedding_model_stale(tmp_path: Path) ->
     status = cache.get_video_status("vid_old_model")
 
     assert status is not None
-    assert status["transcript_index_state"] == "stale"
+    assert status.transcript_index_state == "stale"
 
 
 def test_get_video_status_partial(tmp_path: Path) -> None:
@@ -254,12 +254,12 @@ def test_get_video_status_partial(tmp_path: Path) -> None:
 
     status = cache.get_video_status("vid2")
     assert status is not None
-    assert status["has_metadata"] is False
-    assert status["has_transcript"] is False
-    assert status["has_vision_index"] is False
-    assert status["transcript_segments"] == 0
-    assert status["title"] is None
-    assert status["cached_at"] is None
+    assert status.has_metadata is False
+    assert status.has_transcript is False
+    assert status.has_vision_index is False
+    assert status.transcript_segments == 0
+    assert status.title is None
+    assert status.cached_at is None
 
 
 def test_get_video_status_corrupt_json(tmp_path: Path) -> None:
@@ -272,6 +272,6 @@ def test_get_video_status_corrupt_json(tmp_path: Path) -> None:
 
     status = cache.get_video_status("vid3")
     assert status is not None
-    assert status["has_metadata"] is True
-    assert status["title"] is None
-    assert status["transcript_segments"] == 0
+    assert status.has_metadata is True
+    assert status.title is None
+    assert status.transcript_segments == 0

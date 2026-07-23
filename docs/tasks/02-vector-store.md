@@ -28,7 +28,7 @@ Task 01에서 로컬 JSON으로 저장한 자막을 영상별 ChromaDB 컬렉션
 
 ## 3. 작업 체크리스트
 
-- [x] **Check 2.1**: `TranscriptVectorStore`의 로컬 컬렉션 생성·자막 upsert·개수 조회 구현 및 Mock 유닛 테스트 작성
+- [x] **Check 2.1**: Chroma transcript index repository의 로컬 컬렉션 생성·자막 upsert·개수 조회 구현 및 Mock 유닛 테스트 작성
 - [x] **Check 2.2**: Gemini Embedding 2 기반 문맥 청크·manifest 재색인과 `process` 자동 동기화 구현 및 Mock 유닛 테스트 작성
 - [x] **Check 2.3**: `poetry run poe check` 일괄 통과 확인
 - [x] **Check 2.4**: `status`에 자막 인덱스 상태 및 manifest 메타데이터 표시와 유닛 테스트 추가

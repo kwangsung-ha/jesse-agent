@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from tubetalk import __version__
 from tubetalk.core.config import Settings, settings
 
@@ -20,6 +23,8 @@ def test_settings_defaults():
     assert s.llm_model == "gemini-2.5-pro"
     assert s.embedding_model == "gemini-embedding-2"
     assert s.embedding_dimension == 768
+    assert s.embedding_provider == "gemini"
+    assert s.vector_repository == "chroma"
     assert s.transcript_chunk_max_seconds == 45.0
     assert s.transcript_chunk_max_characters == 1200
     assert settings is not None
@@ -34,3 +39,13 @@ def test_ensure_data_dir(tmp_path: Path):
     created_dir = s.ensure_data_dir()
     assert created_dir.exists()
     assert created_dir == target_dir
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("embedding_provider", "local"), ("vector_repository", "qdrant")],
+)
+def test_settings_reject_unsupported_infrastructure(field: str, value: str) -> None:
+    """Only implementations installed in this release are selectable."""
+    with pytest.raises(ValidationError):
+        Settings(**{field: value})

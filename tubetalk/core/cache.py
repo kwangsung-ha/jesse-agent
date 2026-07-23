@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from tubetalk.core.config import settings
+from tubetalk.domain.video_status import VideoStatus
 
 
 class LocalCacheManager:
@@ -55,9 +56,9 @@ class LocalCacheManager:
     # Listing / status helpers
     # ------------------------------------------------------------------
 
-    def list_cached_videos(self) -> list[dict[str, Any]]:
+    def list_cached_videos(self) -> list[VideoStatus]:
         """Return a summary list of every cached video under ``data/``."""
-        results: list[dict[str, Any]] = []
+        results: list[VideoStatus] = []
         if not self._data_dir.is_dir():
             return results
 
@@ -70,7 +71,7 @@ class LocalCacheManager:
                 results.append(status)
         return results
 
-    def get_video_status(self, video_id: str) -> Optional[dict[str, Any]]:
+    def get_video_status(self, video_id: str) -> Optional[VideoStatus]:
         """Return detailed cache status for *video_id*, or ``None``."""
         video_dir = self._data_dir / video_id
         if not video_dir.is_dir():
@@ -109,18 +110,30 @@ class LocalCacheManager:
             mtime = ref_file.stat().st_mtime
             cached_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
 
-        return {
-            "video_id": video_id,
-            "title": title,
-            "channel": channel,
-            "duration": duration,
-            "has_metadata": has_metadata,
-            "has_transcript": has_transcript,
-            "has_vision_index": has_vision_index,
-            "transcript_segments": transcript_count,
-            **transcript_index,
-            "cached_at": cached_at,
-        }
+        return VideoStatus(
+            video_id=video_id,
+            title=title if isinstance(title, str) else None,
+            channel=channel if isinstance(channel, str) else None,
+            duration=float(duration) if isinstance(duration, (int, float)) else None,
+            has_metadata=has_metadata,
+            has_transcript=has_transcript,
+            has_vision_index=has_vision_index,
+            transcript_segments=transcript_count,
+            transcript_index_state=str(transcript_index["transcript_index_state"]),
+            transcript_index_chunks=_optional_int(
+                transcript_index["transcript_index_chunks"]
+            ),
+            transcript_index_model=_optional_string(
+                transcript_index["transcript_index_model"]
+            ),
+            transcript_index_dimension=_optional_int(
+                transcript_index["transcript_index_dimension"]
+            ),
+            transcript_indexed_at=_optional_string(
+                transcript_index["transcript_indexed_at"]
+            ),
+            cached_at=cached_at,
+        )
 
     def _get_transcript_index_status(self, video_dir: Path) -> dict[str, Any]:
         """Return transcript index metadata without opening the Chroma database."""
@@ -162,13 +175,21 @@ class LocalCacheManager:
                     separators=(",", ":"),
                 ).encode()
             ).hexdigest()
-            if manifest.get("transcript_sha256") != transcript_sha256:
-                return {**result, "transcript_index_state": "stale"}
             if (
-                manifest.get("embedding_model") != settings.embedding_model
+                manifest.get("transcript_sha256") != transcript_sha256
+                or manifest.get("embedding_model") != settings.embedding_model
                 or manifest.get("embedding_dimension") != settings.embedding_dimension
             ):
                 return {**result, "transcript_index_state": "stale"}
+
             return {**result, "transcript_index_state": "current"}
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
             return {**result, "transcript_index_state": "invalid"}
+
+
+def _optional_string(value: Any) -> Optional[str]:
+    return value if isinstance(value, str) else None
+
+
+def _optional_int(value: Any) -> Optional[int]:
+    return value if isinstance(value, int) else None

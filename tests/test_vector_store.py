@@ -7,12 +7,14 @@ from typing import Any
 
 import pytest
 
-from tubetalk.storage.vector_store import (
+from tubetalk.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
-    GeminiEmbeddingProvider,
-    TranscriptVectorStore,
     chunk_transcript,
     format_document,
+)
+from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
+from tubetalk.infrastructure.repositories.chroma_transcript import (
+    ChromaTranscriptIndexRepository,
 )
 
 
@@ -30,18 +32,20 @@ class FakeEmbeddingProvider:
         return [[float(index), 0.0, 1.0] for index in range(len(documents))]
 
 
-def _make_store(tmp_path: Path, mocker: Any) -> tuple[TranscriptVectorStore, Any, Any]:
+def _make_store(
+    tmp_path: Path, mocker: Any
+) -> tuple[ChromaTranscriptIndexRepository, Any, Any]:
     """Create a store with its Chroma client replaced by a mock."""
     collection = mocker.Mock()
     collection.count.return_value = 0
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     persistent_client = mocker.patch(
-        "tubetalk.storage.vector_store.chromadb.PersistentClient",
+        "tubetalk.infrastructure.repositories.chroma_transcript.chromadb.PersistentClient",
         return_value=client,
     )
 
-    store = TranscriptVectorStore(
+    store = ChromaTranscriptIndexRepository(
         "video123",
         data_dir=tmp_path,
         embedding_dimension=3,

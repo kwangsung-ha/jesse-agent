@@ -1,18 +1,18 @@
 """TubeTalk CLI entry point powered by Typer & Rich."""
 
-from datetime import datetime, timezone
 from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from tubetalk.core.cache import LocalCacheManager
-from tubetalk.core.config import settings
-from tubetalk.pipeline.loader import YouTubeLoader
-from tubetalk.storage.vector_store import (
-    GeminiEmbeddingProvider,
-    TranscriptVectorStore,
+from tubetalk.bootstrap import create_video_service
+from tubetalk.services.video_service import (
+    InvalidVideoUrlError,
+    ProcessResult,
+    VideoIngestionError,
+    VideoNotFoundError,
+    VideoStatus,
 )
 
 app = typer.Typer(
@@ -24,8 +24,8 @@ console = Console()
 
 
 @app.callback()
-def main():
-    pass
+def main() -> None:
+    """Configure the TubeTalk command group."""
 
 
 @app.command()
@@ -33,99 +33,66 @@ def status(
     video_id: Optional[str] = typer.Argument(default=None),
 ) -> None:
     """Show local cache status for all or a specific video."""
-    cache = LocalCacheManager()
-
+    service = create_video_service()
     if video_id is None:
-        _show_all(cache)
-    else:
-        _show_detail(cache, video_id)
+        _show_all(service.list_statuses())
+        return
+    try:
+        _show_detail(service.get_status(video_id))
+    except VideoNotFoundError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from error
 
 
 @app.command()
 def process(url: str = typer.Argument(..., metavar="YOUTUBE_URL")) -> None:
-    """Fetch a video's metadata and transcript, then save them locally.
-
-    JSON cache is always written first; transcript vector indexing follows when
-    the Gemini API is available. Vision indexing and summaries are later stages.
-    """
-    loader = YouTubeLoader()
+    """Fetch a video's data, cache it, and synchronise its text index."""
+    service = create_video_service()
     try:
-        video_id = loader.extract_video_id(url)
-    except ValueError as error:
+        result = service.process(url)
+    except InvalidVideoUrlError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(code=2) from error
-
-    cache = LocalCacheManager()
-    if cache.has_cache(video_id):
-        console.print(f"[green]Cache hit for {video_id}; using saved data.[/green]")
-        _sync_transcript_index(cache, video_id)
-        _show_detail(cache, video_id)
-        return
-
-    console.print(f"[cyan]Collecting metadata and transcript for {video_id}...[/cyan]")
-    try:
-        metadata = loader.fetch_metadata(url)
-        transcript = loader.fetch_transcript(video_id)
-    except Exception as error:
-        console.print(f"[red]Failed to process {video_id}: {error}[/red]")
+    except VideoIngestionError as error:
+        console.print(f"[red]{error}[/red]")
         raise typer.Exit(code=1) from error
 
-    metadata.update(
-        {
-            "video_id": video_id,
-            "source_url": url,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-    cache.save_json(video_id, "metadata.json", metadata)
-    cache.save_json(video_id, "transcript.json", transcript)
-
-    console.print(
-        f"[green]Saved {len(transcript)} transcript segments for {video_id}.[/green]"
-    )
-    _sync_transcript_index(cache, video_id, metadata=metadata, transcript=transcript)
-    _show_detail(cache, video_id)
-
-
-def _sync_transcript_index(
-    cache: LocalCacheManager,
-    video_id: str,
-    metadata: Optional[dict[str, object]] = None,
-    transcript: Optional[list[dict[str, object]]] = None,
-) -> None:
-    """Create or refresh the transcript index without invalidating JSON cache."""
-    try:
-        loaded_metadata = metadata or cache.load_json(video_id, "metadata.json")
-        loaded_transcript = transcript or cache.load_json(video_id, "transcript.json")
-        if not isinstance(loaded_metadata, dict) or not isinstance(
-            loaded_transcript, list
-        ):
-            raise ValueError("Cached metadata or transcript has an invalid format")
-
-        store = TranscriptVectorStore(video_id)
-        if not store.needs_indexing(loaded_transcript):
-            console.print("[dim]Transcript index is current.[/dim]")
-            return
-
-        title = loaded_metadata.get("title")
-        if not isinstance(title, str) or not title:
-            title = f"YouTube video {video_id}"
-        provider = GeminiEmbeddingProvider(api_key=settings.gemini_api_key)
-        chunk_count = store.index_transcript(loaded_transcript, title, provider)
-        console.print(f"[green]Indexed {chunk_count} transcript chunks.[/green]")
-    except Exception as error:
+    if result.cache_hit:
         console.print(
-            f"[yellow]Warning: transcript index was not updated: {error}[/yellow]"
+            f"[green]Cache hit for {result.video_id}; using saved data.[/green]"
+        )
+    else:
+        console.print(
+            f"[green]Saved {result.transcript_segments} transcript segments for "
+            f"{result.video_id}.[/green]"
+        )
+    _show_indexing_result(result)
+    try:
+        _show_detail(service.get_status(result.video_id))
+    except VideoNotFoundError as error:
+        console.print(f"[red]{error}[/red]")
+
+
+def _show_indexing_result(result: ProcessResult) -> None:
+    """Render the non-fatal transcript indexing outcome."""
+    if result.indexing.state == "current":
+        console.print("[dim]Transcript index is current.[/dim]")
+    elif result.indexing.state == "indexed":
+        console.print(
+            f"[green]Indexed {result.indexing.chunk_count} transcript chunks.[/green]"
+        )
+    elif result.indexing.warning:
+        console.print(
+            "[yellow]Warning: transcript index was not updated: "
+            f"{result.indexing.warning}[/yellow]"
         )
 
 
-def _show_all(cache: LocalCacheManager) -> None:
+def _show_all(videos: list[VideoStatus]) -> None:
     """Display a Rich table summarising every cached video."""
-    videos = cache.list_cached_videos()
     if not videos:
         console.print("[yellow]No cached videos found.[/yellow]")
         return
-
     table = Table(title="🎬 Cached Videos", show_lines=True)
     table.add_column("Video ID", style="cyan", no_wrap=True)
     table.add_column("Title", style="green")
@@ -133,93 +100,81 @@ def _show_all(cache: LocalCacheManager) -> None:
     table.add_column("Segments", justify="right")
     table.add_column("Text Index", justify="center")
     table.add_column("Vision", justify="center")
-
-    for v in videos:
+    for video in videos:
         table.add_row(
-            v["video_id"],
-            v.get("title") or "—",
-            v.get("channel") or "—",
-            str(v.get("transcript_segments", 0)),
-            _format_index_summary(v),
-            "✅" if v.get("has_vision_index") else "—",
+            video.video_id,
+            video.title or "—",
+            video.channel or "—",
+            str(video.transcript_segments),
+            _format_index_summary(video),
+            "✅" if video.has_vision_index else "—",
         )
-
     console.print(table)
 
 
-def _show_detail(cache: LocalCacheManager, video_id: str) -> None:
+def _show_detail(status_info: VideoStatus) -> None:
     """Display detailed metadata for a single cached video."""
-    status_info = cache.get_video_status(video_id)
-    if status_info is None:
-        console.print(f"[red]Video '{video_id}' not found in local cache.[/red]")
-        raise typer.Exit(code=1)
-
     table = Table(
-        title=f"📺 Video Detail — {video_id}",
+        title=f"📺 Video Detail — {status_info.video_id}",
         show_header=False,
         show_lines=True,
     )
     table.add_column("Key", style="bold cyan")
     table.add_column("Value", style="white")
-
-    duration = status_info.get("duration")
+    duration = status_info.duration
     duration_str = f"{duration:.0f}s" if duration is not None else "—"
-
     rows = [
-        ("Video ID", status_info["video_id"]),
-        ("Title", status_info.get("title") or "—"),
-        ("Channel", status_info.get("channel") or "—"),
+        ("Video ID", status_info.video_id),
+        ("Title", status_info.title or "—"),
+        ("Channel", status_info.channel or "—"),
         ("Duration", duration_str),
-        ("Metadata", "✅" if status_info["has_metadata"] else "❌"),
-        ("Transcript", "✅" if status_info["has_transcript"] else "❌"),
-        (
-            "Transcript Segments",
-            str(status_info.get("transcript_segments", 0)),
-        ),
+        ("Metadata", "✅" if status_info.has_metadata else "❌"),
+        ("Transcript", "✅" if status_info.has_transcript else "❌"),
+        ("Transcript Segments", str(status_info.transcript_segments)),
         ("Transcript Index", _format_index_state(status_info)),
         (
             "Indexed Chunks",
-            str(status_info["transcript_index_chunks"])
-            if status_info.get("transcript_index_chunks") is not None
+            str(status_info.transcript_index_chunks)
+            if status_info.transcript_index_chunks is not None
             else "—",
         ),
-        ("Embedding Model", status_info.get("transcript_index_model") or "—"),
+        ("Embedding Model", status_info.transcript_index_model or "—"),
         (
             "Embedding Dimension",
-            str(status_info["transcript_index_dimension"])
-            if status_info.get("transcript_index_dimension") is not None
+            str(status_info.transcript_index_dimension)
+            if status_info.transcript_index_dimension is not None
             else "—",
         ),
-        ("Transcript Indexed At", status_info.get("transcript_indexed_at") or "—"),
-        ("Vision Index", "✅" if status_info["has_vision_index"] else "❌"),
-        ("Cached At", status_info.get("cached_at") or "—"),
+        ("Transcript Indexed At", status_info.transcript_indexed_at or "—"),
+        ("Vision Index", "✅" if status_info.has_vision_index else "❌"),
+        ("Cached At", status_info.cached_at or "—"),
     ]
     for key, value in rows:
         table.add_row(key, value)
-
     console.print(table)
 
 
-def _format_index_summary(status_info: dict[str, object]) -> str:
+def _format_index_summary(status_info: VideoStatus) -> str:
     """Format text index state for the all-videos table."""
-    state = status_info.get("transcript_index_state")
-    chunks = status_info.get("transcript_index_chunks")
-    if state == "current":
-        return f"✅ {chunks}" if chunks is not None else "✅"
-    if state == "stale":
+    if status_info.transcript_index_state == "current":
+        return (
+            f"✅ {status_info.transcript_index_chunks}"
+            if status_info.transcript_index_chunks is not None
+            else "✅"
+        )
+    if status_info.transcript_index_state == "stale":
         return "⚠️ stale"
-    if state == "invalid":
+    if status_info.transcript_index_state == "invalid":
         return "❌ invalid"
     return "—"
 
 
-def _format_index_state(status_info: dict[str, object]) -> str:
+def _format_index_state(status_info: VideoStatus) -> str:
     """Format text index state for the detail table."""
-    state = status_info.get("transcript_index_state")
-    if state == "current":
+    if status_info.transcript_index_state == "current":
         return "✅ Current"
-    if state == "stale":
+    if status_info.transcript_index_state == "stale":
         return "⚠️ Stale"
-    if state == "invalid":
+    if status_info.transcript_index_state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"

@@ -1,6 +1,7 @@
 """TubeTalk configuration settings management module."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,6 +16,8 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.5-pro"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = 768
+    embedding_provider: Literal["gemini"] = "gemini"
+    vector_repository: Literal["chroma"] = "chroma"
     transcript_chunk_max_seconds: float = 45.0
     transcript_chunk_max_characters: int = 1200
 
