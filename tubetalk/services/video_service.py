@@ -32,6 +32,11 @@ from tubetalk.ports.transcript_index_repository import (
     TranscriptIndexStatus,
 )
 from tubetalk.ports.vision import VisionAnalyzer, VisionProviderError
+from tubetalk.ports.vision_index_repository import (
+    VisionIndexRepository,
+    VisionIndexRepositoryError,
+    VisionVectorIndexStatus,
+)
 
 
 class VideoServiceError(Exception):
@@ -83,6 +88,9 @@ class VisionResult:
     state: str
     scene_count: Optional[int] = None
     warning: Optional[str] = None
+    indexing: IndexingResult = field(
+        default_factory=lambda: IndexingResult(state="missing")
+    )
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,7 @@ class VideoService:
         transcript_index_repository_factory: Callable[[str], TranscriptIndexRepository],
         summary_provider_factory: Callable[[], SummaryProvider],
         vision_analyzer_factory: Callable[[], VisionAnalyzer],
+        vision_index_repository_factory: Callable[[str], VisionIndexRepository],
         summary_model: str,
         summary_prompt_version: str,
         summary_language: str,
@@ -121,6 +130,7 @@ class VideoService:
         self._embedding_provider_factory = embedding_provider_factory
         self._summary_provider_factory = summary_provider_factory
         self._vision_analyzer_factory = vision_analyzer_factory
+        self._vision_index_repository_factory = vision_index_repository_factory
         self._summary_model = summary_model
         self._summary_prompt_version = summary_prompt_version
         self._summary_language = summary_language
@@ -228,6 +238,7 @@ class VideoService:
             index_status = repository.get_index_status(segments)
         except (OSError, TranscriptIndexRepositoryError):
             index_status = TranscriptIndexStatus(state="invalid")
+        vision_vector_status = self._vision_vector_status(video_id)
         return replace(
             status,
             transcript_index_state=index_status.state,
@@ -235,6 +246,11 @@ class VideoService:
             transcript_index_model=index_status.embedding_model,
             transcript_index_dimension=index_status.embedding_dimension,
             transcript_indexed_at=index_status.indexed_at,
+            vision_vector_index_state=vision_vector_status.state,
+            vision_vector_index_scenes=vision_vector_status.scene_count,
+            vision_vector_index_model=vision_vector_status.embedding_model,
+            vision_vector_index_dimension=vision_vector_status.embedding_dimension,
+            vision_vector_indexed_at=vision_vector_status.indexed_at,
         )
 
     def _load_cached_resources(
@@ -333,7 +349,11 @@ class VideoService:
             )
             if status.state == "current" and status.entry is not None:
                 return VisionResult(
-                    state="current", scene_count=len(status.entry.scenes)
+                    state="current",
+                    scene_count=len(status.entry.scenes),
+                    indexing=self._sync_vision_vectors(
+                        video_id, metadata, status.entry.scenes
+                    ),
                 )
             analyzer = self._vision_analyzer_factory()
             scenes = analyzer.describe(
@@ -353,9 +373,55 @@ class VideoService:
                     ),
                 ),
             )
-            return VisionResult(state="generated", scene_count=len(scenes))
+            return VisionResult(
+                state="generated",
+                scene_count=len(scenes),
+                indexing=self._sync_vision_vectors(video_id, metadata, scenes),
+            )
         except (OSError, ValueError, VisionProviderError) as error:
             return VisionResult(state="warning", warning=str(error))
+
+    def _sync_vision_vectors(
+        self, video_id: str, metadata: dict[str, Any], scenes: tuple[Any, ...]
+    ) -> IndexingResult:
+        """Index visual scene descriptions without failing the scene cache."""
+        try:
+            repository = self._vision_index_repository_factory(video_id)
+            if not repository.needs_indexing(scenes):
+                return IndexingResult(state="current")
+            provider = self._embedding_provider_factory()
+            count = repository.index_scenes(
+                scenes, self._video_title(video_id, metadata), provider
+            )
+            return IndexingResult(state="indexed", chunk_count=count)
+        except (
+            EmbeddingProviderError,
+            OSError,
+            ValueError,
+            VisionIndexRepositoryError,
+        ) as error:
+            return IndexingResult(state="warning", warning=str(error))
+
+    def _vision_vector_status(self, video_id: str) -> VisionVectorIndexStatus:
+        """Read the scene-vector manifest without invoking an embedding provider."""
+        try:
+            metadata = self._cache.load_json(video_id, "metadata.json")
+            source_url = (
+                metadata.get("source_url") if isinstance(metadata, dict) else None
+            )
+            if not isinstance(source_url, str):
+                return VisionVectorIndexStatus(state="missing")
+            vision_entry = self._cache.get_vision_index_status(
+                video_id,
+                source_url=source_url,
+                model=self._vision_model,
+                prompt_version=self._vision_prompt_version,
+            ).entry
+            return self._vision_index_repository_factory(video_id).get_index_status(
+                vision_entry.scenes if vision_entry else None
+            )
+        except (OSError, ValueError, VisionIndexRepositoryError):
+            return VisionVectorIndexStatus(state="invalid")
 
     @staticmethod
     def _video_title(video_id: str, metadata: dict[str, Any]) -> str:

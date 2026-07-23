@@ -30,7 +30,7 @@
   - 공개 YouTube URL 직접 분석 및 timestamped scene description 캐시
   - 로컬 프레임/모델 provider로 확장 가능한 vision interface
 
-- [i] **Task 05: Gemini Vision Scene Vector Index (`infrastructure/repositories/`)** `docs/tasks/05-vision-vector-index.md`
+- [x] **Task 05: Gemini Vision Scene Vector Index (`infrastructure/repositories/`)** `docs/tasks/05-vision-vector-index.md`
   - `vision_index.json` 설명 텍스트의 Gemini Embedding 2 저작
   - ChromaDB `vision_collection` Vector 인덱싱
 

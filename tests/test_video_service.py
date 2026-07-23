@@ -49,6 +49,9 @@ def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any, 
     vision_analyzer.describe.return_value = (
         VisionScene(0, 5, "A presenter appears.", ("presenter",)),
     )
+    vision_store = mocker.Mock()
+    vision_store.needs_indexing.return_value = True
+    vision_store.index_scenes.return_value = 1
     service = VideoService(
         cache=cache,
         loader=loader,
@@ -56,6 +59,7 @@ def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any, 
         transcript_index_repository_factory=mocker.Mock(return_value=store),
         summary_provider_factory=summary_provider_factory,
         vision_analyzer_factory=mocker.Mock(return_value=vision_analyzer),
+        vision_index_repository_factory=mocker.Mock(return_value=vision_store),
         summary_model="gemini-3.5-flash-lite",
         summary_prompt_version="summary-chapters-v1",
         summary_language="ko",
@@ -87,11 +91,12 @@ def test_process_cache_miss_saves_resources_and_indexes(
     assert (tmp_path / "dQw4w9WgXcQ" / "metadata.json").is_file()
     loader.fetch_metadata.assert_called_once_with("https://youtu.be/dQw4w9WgXcQ")
     loader.fetch_transcript.assert_called_once_with("dQw4w9WgXcQ")
-    provider_factory.assert_called_once_with()
+    assert provider_factory.call_count == 2
     summary_provider_factory.assert_called_once_with()
     assert result.summary.state == "generated"
     assert result.vision.state == "generated"
     assert result.vision.scene_count == 1
+    assert result.vision.indexing.state == "indexed"
 
 
 def test_process_reuses_current_vision_index_without_provider_call(

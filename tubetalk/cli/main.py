@@ -285,6 +285,21 @@ def _show_detail(status_info: VideoStatus) -> None:
         ("Vision Model", status_info.vision_model or "—"),
         ("Vision Prompt", status_info.vision_prompt_version or "—"),
         ("Vision Generated At", status_info.vision_generated_at or "—"),
+        ("Vision Vector Index", _format_vision_vector_state(status_info)),
+        (
+            "Vision Vector Scenes",
+            str(status_info.vision_vector_index_scenes)
+            if status_info.vision_vector_index_scenes is not None
+            else "—",
+        ),
+        ("Vision Embedding Model", status_info.vision_vector_index_model or "—"),
+        (
+            "Vision Embedding Dimension",
+            str(status_info.vision_vector_index_dimension)
+            if status_info.vision_vector_index_dimension is not None
+            else "—",
+        ),
+        ("Vision Indexed At", status_info.vision_vector_indexed_at or "—"),
         ("Cached At", status_info.cached_at or "—"),
     ]
     for key, value in rows:
@@ -366,5 +381,16 @@ def _format_vision_state(status_info: VideoStatus) -> str:
     if status_info.vision_index_state == "stale":
         return "⚠️ Stale"
     if status_info.vision_index_state == "invalid":
+        return "❌ Invalid"
+    return "❌ Missing"
+
+
+def _format_vision_vector_state(status_info: VideoStatus) -> str:
+    """Format visual vector-index freshness for a detail view."""
+    if status_info.vision_vector_index_state == "current":
+        return "✅ Current"
+    if status_info.vision_vector_index_state == "stale":
+        return "⚠️ Stale"
+    if status_info.vision_vector_index_state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"

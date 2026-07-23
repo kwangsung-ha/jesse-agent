@@ -33,3 +33,8 @@ class VideoStatus:
     vision_model: Optional[str] = None
     vision_prompt_version: Optional[str] = None
     vision_generated_at: Optional[str] = None
+    vision_vector_index_state: str = "missing"
+    vision_vector_index_scenes: Optional[int] = None
+    vision_vector_index_model: Optional[str] = None
+    vision_vector_index_dimension: Optional[int] = None
+    vision_vector_indexed_at: Optional[str] = None
