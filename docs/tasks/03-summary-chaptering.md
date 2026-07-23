@@ -20,7 +20,7 @@ when its transcript or generation settings change.
 
 - [x] **Check 3.1**: Add summary domain models, cache manifest persistence,
   freshness validation, and unit tests.
-- [ ] **Check 3.2**: Add the Gemini Flash-Lite summary port and adapter,
+- [x] **Check 3.2**: Add the Gemini Flash-Lite summary port and adapter,
   production wiring, and mocked unit tests.
 - [ ] **Check 3.3**: Synchronize summaries from the video service and preserve
   cached resources when generation fails.

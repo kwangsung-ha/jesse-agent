@@ -8,8 +8,10 @@ from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
 from tubetalk.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
 )
+from tubetalk.infrastructure.summaries.gemini import GeminiSummaryProvider
 from tubetalk.pipeline.loader import YouTubeLoader
 from tubetalk.ports.embedding import EmbeddingProvider
+from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import TranscriptIndexRepository
 from tubetalk.services.video_service import VideoService
 
@@ -21,6 +23,7 @@ def create_video_service(config: Settings = settings) -> VideoService:
         loader=YouTubeLoader(),
         embedding_provider_factory=_embedding_provider_factory(config),
         transcript_index_repository_factory=_repository_factory(config),
+        summary_provider_factory=_summary_provider_factory(config),
     )
 
 
@@ -47,3 +50,11 @@ def _repository_factory(
                 embedding_model=config.embedding_model,
                 embedding_dimension=config.embedding_dimension,
             )
+
+
+def _summary_provider_factory(config: Settings) -> Callable[[], SummaryProvider]:
+    """Build a factory so summary credentials are only resolved when needed."""
+    return lambda: GeminiSummaryProvider(
+        api_key=config.gemini_api_key,
+        model=config.summary_model,
+    )

@@ -27,6 +27,7 @@ def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any]:
         loader=loader,
         embedding_provider_factory=provider_factory,
         transcript_index_repository_factory=mocker.Mock(return_value=store),
+        summary_provider_factory=mocker.Mock(),
     )
     return service, loader, store, provider_factory
 

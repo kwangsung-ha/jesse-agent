@@ -21,6 +21,9 @@ def test_settings_defaults():
     assert s.default_sample_interval_sec == 5.0
     assert s.vision_model == "gemini-2.5-flash"
     assert s.llm_model == "gemini-2.5-pro"
+    assert s.summary_model == "gemini-3.5-flash-lite"
+    assert s.summary_language == "ko"
+    assert s.summary_prompt_version == "summary-chapters-v1"
     assert s.embedding_model == "gemini-embedding-2"
     assert s.embedding_dimension == 768
     assert s.embedding_provider == "gemini"

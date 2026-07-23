@@ -12,6 +12,7 @@ from tubetalk.core.cache import LocalCacheManager
 from tubetalk.domain.video_status import VideoStatus
 from tubetalk.pipeline.loader import YouTubeLoader
 from tubetalk.ports.embedding import EmbeddingProvider, EmbeddingProviderError
+from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import (
     TranscriptIndexRepository,
     TranscriptIndexRepositoryError,
@@ -63,12 +64,14 @@ class VideoService:
         loader: YouTubeLoader,
         embedding_provider_factory: Callable[[], EmbeddingProvider],
         transcript_index_repository_factory: Callable[[str], TranscriptIndexRepository],
+        summary_provider_factory: Callable[[], SummaryProvider],
     ) -> None:
         """Create a service with explicit infrastructure dependencies."""
         self._cache = cache
         self._loader = loader
         self._transcript_index_repository_factory = transcript_index_repository_factory
         self._embedding_provider_factory = embedding_provider_factory
+        self._summary_provider_factory = summary_provider_factory
 
     def process(self, url: str) -> ProcessResult:
         """Fetch or reuse a video cache, then bring its index up to date."""

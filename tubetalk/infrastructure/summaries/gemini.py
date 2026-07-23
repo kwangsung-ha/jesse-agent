@@ -1,0 +1,157 @@
+"""Gemini adapter for structured transcript summaries."""
+
+import json
+from typing import Any, Optional
+
+from google import genai
+from google.genai import types
+from google.genai.errors import APIError
+from httpx import HTTPError
+
+from tubetalk.core.config import settings
+from tubetalk.domain.summary import Chapter, VideoSummary
+from tubetalk.ports.summary import SummaryProviderError
+
+
+class GeminiSummaryProvider:
+    """Generate concise, timestamped summaries with a Gemini text model."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = settings.summary_model,
+        client: Optional[Any] = None,
+    ) -> None:
+        """Create a summary provider using the configured Gemini model."""
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is required to generate summaries")
+        self.model = model
+        self._client = client or genai.Client(api_key=api_key)
+
+    def generate_summary(
+        self,
+        transcript: list[dict[str, Any]],
+        *,
+        title: str,
+        language: str,
+    ) -> VideoSummary:
+        """Generate and validate a structured summary from the transcript."""
+        prompt, last_timestamp = _summary_prompt(transcript, title, language)
+        try:
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema={
+                        "type": "object",
+                        "properties": {
+                            "summary": {"type": "string"},
+                            "chapters": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "start_sec": {"type": "number"},
+                                        "title": {"type": "string"},
+                                    },
+                                    "required": ["start_sec", "title"],
+                                },
+                            },
+                        },
+                        "required": ["summary", "chapters"],
+                    },
+                ),
+            )
+        except (APIError, HTTPError) as error:
+            raise SummaryProviderError(str(error)) from error
+        return _parse_response(response, last_timestamp)
+
+
+def _summary_prompt(
+    transcript: list[dict[str, Any]], title: str, language: str
+) -> tuple[str, float]:
+    """Build the grounded prompt and find the final valid transcript timestamp."""
+    if not transcript:
+        raise SummaryProviderError("Cannot summarize an empty transcript")
+    lines: list[str] = []
+    last_timestamp = 0.0
+    for segment in transcript:
+        if not isinstance(segment, dict):
+            raise SummaryProviderError("Transcript segments must be objects")
+        text = segment.get("text")
+        start_sec = segment.get("start_sec")
+        duration_sec = segment.get("duration_sec", 0.0)
+        if (
+            not isinstance(text, str)
+            or not text.strip()
+            or not isinstance(start_sec, (int, float))
+            or isinstance(start_sec, bool)
+            or not isinstance(duration_sec, (int, float))
+            or isinstance(duration_sec, bool)
+        ):
+            raise SummaryProviderError("Transcript segments have an invalid format")
+        start = float(start_sec)
+        end = start + float(duration_sec)
+        if start < 0 or end < start:
+            raise SummaryProviderError("Transcript timestamps must be non-negative")
+        last_timestamp = max(last_timestamp, end)
+        lines.append(f"[{_timestamp(start)}] {text.strip()}")
+    prompt = (
+        "Summarize the following YouTube transcript. Use only facts supported by "
+        "the transcript. Return JSON with a 3-5 sentence `summary` and a "
+        "chronological `chapters` array. Every chapter needs a `start_sec` "
+        "timestamp from the transcript and a concise `title`. "
+        f"Write all text in {language}.\n\n"
+        f"Video title: {title}\n\nTranscript:\n" + "\n".join(lines)
+    )
+    return prompt, last_timestamp
+
+
+def _parse_response(response: Any, last_timestamp: float) -> VideoSummary:
+    """Convert the provider's JSON response into validated domain models."""
+    try:
+        payload = json.loads(response.text)
+        summary = payload["summary"]
+        chapters_data = payload["chapters"]
+        if not isinstance(summary, str) or not isinstance(chapters_data, list):
+            raise ValueError("Summary response has invalid field types")
+        chapters = tuple(
+            _chapter_from_data(chapter, last_timestamp) for chapter in chapters_data
+        )
+        return VideoSummary(text=summary, chapters=chapters)
+    except (
+        AttributeError,
+        KeyError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as error:
+        raise SummaryProviderError(
+            f"Invalid Gemini summary response: {error}"
+        ) from error
+
+
+def _chapter_from_data(data: Any, last_timestamp: float) -> Chapter:
+    """Validate one Gemini chapter against the source transcript duration."""
+    if not isinstance(data, dict):
+        raise ValueError("Chapter must be an object")
+    start_sec = data.get("start_sec")
+    title = data.get("title")
+    if not isinstance(start_sec, (int, float)) or isinstance(start_sec, bool):
+        raise ValueError("Chapter start_sec must be numeric")
+    if float(start_sec) > last_timestamp:
+        raise ValueError("Chapter start_sec exceeds transcript duration")
+    if not isinstance(title, str):
+        raise ValueError("Chapter title must be text")
+    return Chapter(start_sec=float(start_sec), title=title)
+
+
+def _timestamp(seconds: float) -> str:
+    """Render a transcript timestamp for the model prompt."""
+    total_seconds = int(seconds)
+    minutes, seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"

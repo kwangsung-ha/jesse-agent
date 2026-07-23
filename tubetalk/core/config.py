@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     default_sample_interval_sec: float = 5.0
     vision_model: str = "gemini-2.5-flash"
     llm_model: str = "gemini-2.5-pro"
+    summary_model: str = "gemini-3.5-flash-lite"
+    summary_language: str = "ko"
+    summary_prompt_version: str = "summary-chapters-v1"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = 768
     embedding_provider: Literal["gemini"] = "gemini"
