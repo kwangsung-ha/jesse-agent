@@ -261,7 +261,7 @@ def test_video_status_includes_current_vision_metadata(tmp_path: Path) -> None:
                 schema_version=VISION_SCHEMA_VERSION,
                 source_url="https://www.youtube.com/watch?v=vid1",
                 model="gemini-3.5-flash",
-                prompt_version="vision-scenes-v1",
+                prompt_version="vision-scenes-v2-30s",
                 generated_at="2026-07-24T00:00:00+00:00",
             ),
         ),

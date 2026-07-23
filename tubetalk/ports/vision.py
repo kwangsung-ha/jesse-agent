@@ -12,5 +12,7 @@ class VisionProviderError(Exception):
 class VisionAnalyzer(Protocol):
     """Describe a video source without exposing provider-specific API details."""
 
-    def describe(self, source: VisionSource, *, title: str) -> tuple[VisionScene, ...]:
+    def describe(
+        self, source: VisionSource, *, title: str, duration_sec: float
+    ) -> tuple[VisionScene, ...]:
         """Return chronologically ordered visual scenes for the source."""

@@ -64,7 +64,7 @@ def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any, 
         summary_prompt_version="summary-chapters-v1",
         summary_language="ko",
         vision_model="gemini-3.5-flash",
-        vision_prompt_version="vision-scenes-v1",
+        vision_prompt_version="vision-scenes-v2-30s",
     )
     return service, loader, store, provider_factory, summary_provider_factory
 
@@ -77,7 +77,7 @@ def test_process_cache_miss_saves_resources_and_indexes(
         tmp_path, mocker
     )
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example"}
+    loader.fetch_metadata.return_value = {"title": "Example", "duration": 5}
     loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
     store.needs_indexing.return_value = True
     store.index_transcript.return_value = 1
@@ -111,6 +111,7 @@ def test_process_reuses_current_vision_index_without_provider_call(
         {
             "title": "Example",
             "source_url": "https://youtu.be/dQw4w9WgXcQ",
+            "duration": 5,
         },
     )
     cache.save_json(
@@ -124,7 +125,7 @@ def test_process_reuses_current_vision_index_without_provider_call(
                 schema_version=VISION_SCHEMA_VERSION,
                 source_url="https://youtu.be/dQw4w9WgXcQ",
                 model="gemini-3.5-flash",
-                prompt_version="vision-scenes-v1",
+                prompt_version="vision-scenes-v2-30s",
                 generated_at="2026-07-24T00:00:00+00:00",
             ),
         ),
@@ -144,7 +145,7 @@ def test_process_keeps_text_cache_when_vision_generation_fails(
     """Vision-provider errors must not discard transcript or summary resources."""
     service, loader, store, _, _ = _service(tmp_path, mocker)
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example"}
+    loader.fetch_metadata.return_value = {"title": "Example", "duration": 5}
     loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
     store.needs_indexing.return_value = False
     service._vision_analyzer_factory.return_value.describe.side_effect = (

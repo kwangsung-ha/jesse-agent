@@ -336,9 +336,15 @@ class VideoService:
     ) -> VisionResult:
         """Reuse or generate visual scenes without affecting text-cache success."""
         source_url = metadata.get("source_url")
+        duration = metadata.get("duration")
         if not isinstance(source_url, str) or not source_url:
             return VisionResult(
                 state="warning", warning="Cached metadata does not contain a source URL"
+            )
+        if not isinstance(duration, (int, float)) or isinstance(duration, bool):
+            return VisionResult(
+                state="warning",
+                warning="Cached metadata does not contain a valid duration",
             )
         try:
             status = self._cache.get_vision_index_status(
@@ -359,6 +365,7 @@ class VideoService:
             scenes = analyzer.describe(
                 YouTubeUrlVisionSource(source_url),
                 title=self._video_title(video_id, metadata),
+                duration_sec=float(duration),
             )
             self._cache.save_vision_index(
                 video_id,

@@ -19,7 +19,7 @@ def test_settings_defaults():
     s = Settings(gemini_api_key="test-key")
     assert s.gemini_api_key == "test-key"
     assert s.vision_model == "gemini-3.5-flash"
-    assert s.vision_prompt_version == "vision-scenes-v1"
+    assert s.vision_prompt_version == "vision-scenes-v2-30s"
     assert s.llm_model == "gemini-2.5-pro"
     assert s.summary_model == "gemini-3.5-flash-lite"
     assert s.summary_language == "ko"

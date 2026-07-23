@@ -26,37 +26,69 @@ class GeminiVisionAnalyzer:
         self.model = model
         self._client = client or genai.Client(api_key=api_key)
 
-    def describe(self, source: VisionSource, *, title: str) -> tuple[VisionScene, ...]:
-        """Request a concise, timestamped visual index for a public video."""
+    def describe(
+        self, source: VisionSource, *, title: str, duration_sec: float
+    ) -> tuple[VisionScene, ...]:
+        """Request a timestamped visual index that covers the whole video."""
         if not isinstance(source, YouTubeUrlVisionSource):
             raise VisionProviderError(
                 "Gemini URL-video analysis requires a public YouTube URL source"
             )
+        if duration_sec <= 0:
+            raise VisionProviderError(
+                "Video duration must be positive for scene coverage"
+            )
+        scenes = _parse_response(
+            self._generate(source, _vision_prompt(title, duration_sec))
+        )
+        errors = _coverage_errors(scenes, duration_sec)
+        if not errors:
+            return scenes
+        corrected = _parse_response(
+            self._generate(source, _correction_prompt(title, duration_sec, errors))
+        )
+        corrected_errors = _coverage_errors(corrected, duration_sec)
+        if corrected_errors:
+            raise VisionProviderError(
+                "Gemini scene coverage remained incomplete after correction: "
+                + "; ".join(corrected_errors)
+            )
+        return corrected
+
+    def _generate(self, source: YouTubeUrlVisionSource, prompt: str) -> Any:
         try:
-            response = self._client.interactions.create(
+            return self._client.interactions.create(
                 model=self.model,
                 input=[
                     {"type": "video", "uri": source.url},
-                    {"type": "text", "text": _vision_prompt(title)},
+                    {"type": "text", "text": prompt},
                 ],
-                generation_config={
-                    "response_mime_type": "application/json",
-                    "response_schema": _response_schema(),
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": _response_schema(),
                 },
             )
         except (APIError, HTTPError) as error:
             raise VisionProviderError(str(error)) from error
-        return _parse_response(response)
 
 
-def _vision_prompt(title: str) -> str:
+def _vision_prompt(title: str, duration_sec: float) -> str:
     return (
-        "Analyze this public YouTube video visually. Return a chronological list "
-        "of salient visual scenes only; do not summarize spoken content unless it "
-        "is visibly shown. Use exact timestamps supported by the video, cover "
-        "meaningful changes, and include useful visible objects, people, text, "
-        "charts, or actions. Keep each visual_summary concise. "
-        f"Video title: {title}"
+        "Analyze this public YouTube video visually. Return chronological scenes "
+        f"that cover every moment from 0 through {duration_sec:.3f} seconds. "
+        "Each scene must be no longer than 30 seconds, contiguous with its "
+        "neighbors, and use exact video-supported timestamps. Include visual "
+        "objects, people, text, charts, or actions; do not summarize speech unless "
+        f"it is visibly shown. Video title: {title}"
+    )
+
+
+def _correction_prompt(title: str, duration_sec: float, errors: list[str]) -> str:
+    return (
+        _vision_prompt(title, duration_sec)
+        + " Return a complete replacement JSON response. Validation errors: "
+        + "; ".join(errors)
     )
 
 
@@ -92,7 +124,12 @@ def _response_schema() -> dict[str, Any]:
 
 def _parse_response(response: Any) -> tuple[VisionScene, ...]:
     try:
-        payload = json.loads(response.output_text)
+        output_text = response.output_text
+        if not isinstance(output_text, str) or not output_text.strip():
+            raise ValueError(
+                f"Gemini returned no scene JSON ({_response_status(response)})"
+            )
+        payload = json.loads(output_text)
         scenes_data = payload["scenes"]
         if not isinstance(scenes_data, list):
             raise ValueError("Scenes must be a list")
@@ -111,6 +148,36 @@ def _parse_response(response: Any) -> tuple[VisionScene, ...]:
         json.JSONDecodeError,
     ) as error:
         raise VisionProviderError(f"Invalid Gemini vision response: {error}") from error
+
+
+def _response_status(response: Any) -> str:
+    """Return compact interaction state without assuming a specific SDK shape."""
+    status = getattr(response, "status", None)
+    if isinstance(status, str) and status:
+        return f"status={status}"
+    steps = getattr(response, "steps", None)
+    if isinstance(steps, list) and steps:
+        return f"steps={len(steps)}"
+    return "no status details"
+
+
+def _coverage_errors(scenes: tuple[VisionScene, ...], duration_sec: float) -> list[str]:
+    """Return all coverage violations for the 30-second scene policy."""
+    if not scenes:
+        return ["no scenes returned"]
+    errors: list[str] = []
+    covered_until = 0.0
+    for scene in scenes:
+        if scene.start_sec > covered_until + 0.001:
+            errors.append(f"uncovered {covered_until:.3f}-{scene.start_sec:.3f}")
+        if scene.end_sec - scene.start_sec > 30.001:
+            errors.append(f"scene exceeds 30 seconds at {scene.start_sec:.3f}")
+        if scene.end_sec > duration_sec + 0.001:
+            errors.append(f"scene exceeds video duration at {scene.end_sec:.3f}")
+        covered_until = max(covered_until, scene.end_sec)
+    if covered_until < duration_sec - 0.001:
+        errors.append(f"uncovered {covered_until:.3f}-{duration_sec:.3f}")
+    return errors
 
 
 def _scene_from_data(data: Any) -> VisionScene:
