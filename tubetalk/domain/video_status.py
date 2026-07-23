@@ -28,3 +28,8 @@ class VideoStatus:
     summary_language: Optional[str]
     summary_generated_at: Optional[str]
     cached_at: Optional[str]
+    vision_index_state: str = "missing"
+    vision_scene_count: Optional[int] = None
+    vision_model: Optional[str] = None
+    vision_prompt_version: Optional[str] = None
+    vision_generated_at: Optional[str] = None

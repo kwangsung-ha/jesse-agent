@@ -15,8 +15,15 @@ from tubetalk.domain.summary import (
     VideoSummary,
 )
 from tubetalk.domain.transcript_index import transcript_sha256
+from tubetalk.domain.vision import (
+    VISION_SCHEMA_VERSION,
+    VisionIndexEntry,
+    VisionManifest,
+    VisionScene,
+)
 from tubetalk.ports.summary import SummaryProviderError
 from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
+from tubetalk.ports.vision import VisionProviderError
 from tubetalk.services.video_service import (
     InvalidVideoUrlError,
     SummaryGenerationError,
@@ -38,15 +45,22 @@ def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any, 
         text="요약입니다.", chapters=(Chapter(start_sec=0, title="소개"),)
     )
     summary_provider_factory = mocker.Mock(return_value=summary_provider)
+    vision_analyzer = mocker.Mock()
+    vision_analyzer.describe.return_value = (
+        VisionScene(0, 5, "A presenter appears.", ("presenter",)),
+    )
     service = VideoService(
         cache=cache,
         loader=loader,
         embedding_provider_factory=provider_factory,
         transcript_index_repository_factory=mocker.Mock(return_value=store),
         summary_provider_factory=summary_provider_factory,
+        vision_analyzer_factory=mocker.Mock(return_value=vision_analyzer),
         summary_model="gemini-3.5-flash-lite",
         summary_prompt_version="summary-chapters-v1",
         summary_language="ko",
+        vision_model="gemini-3.5-flash",
+        vision_prompt_version="vision-scenes-v1",
     )
     return service, loader, store, provider_factory, summary_provider_factory
 
@@ -76,6 +90,67 @@ def test_process_cache_miss_saves_resources_and_indexes(
     provider_factory.assert_called_once_with()
     summary_provider_factory.assert_called_once_with()
     assert result.summary.state == "generated"
+    assert result.vision.state == "generated"
+    assert result.vision.scene_count == 1
+
+
+def test_process_reuses_current_vision_index_without_provider_call(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """A current visual index should not trigger a second Gemini request."""
+    service, loader, store, _, _ = _service(tmp_path, mocker)
+    cache = LocalCacheManager(data_dir=tmp_path)
+    cache.save_json(
+        "dQw4w9WgXcQ",
+        "metadata.json",
+        {
+            "title": "Example",
+            "source_url": "https://youtu.be/dQw4w9WgXcQ",
+        },
+    )
+    cache.save_json(
+        "dQw4w9WgXcQ", "transcript.json", [{"start_sec": 0, "text": "Hello"}]
+    )
+    cache.save_vision_index(
+        "dQw4w9WgXcQ",
+        VisionIndexEntry(
+            scenes=(VisionScene(0, 5, "A presenter appears.", ("presenter",)),),
+            manifest=VisionManifest(
+                schema_version=VISION_SCHEMA_VERSION,
+                source_url="https://youtu.be/dQw4w9WgXcQ",
+                model="gemini-3.5-flash",
+                prompt_version="vision-scenes-v1",
+                generated_at="2026-07-24T00:00:00+00:00",
+            ),
+        ),
+    )
+    loader.extract_video_id.return_value = "dQw4w9WgXcQ"
+    store.needs_indexing.return_value = False
+
+    result = service.process("https://youtu.be/dQw4w9WgXcQ")
+
+    assert result.vision.state == "current"
+    service._vision_analyzer_factory.assert_not_called()
+
+
+def test_process_keeps_text_cache_when_vision_generation_fails(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """Vision-provider errors must not discard transcript or summary resources."""
+    service, loader, store, _, _ = _service(tmp_path, mocker)
+    loader.extract_video_id.return_value = "dQw4w9WgXcQ"
+    loader.fetch_metadata.return_value = {"title": "Example"}
+    loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
+    store.needs_indexing.return_value = False
+    service._vision_analyzer_factory.return_value.describe.side_effect = (
+        VisionProviderError("video is unavailable")
+    )
+
+    result = service.process("https://youtu.be/dQw4w9WgXcQ")
+
+    assert result.vision.state == "warning"
+    assert result.vision.warning == "video is unavailable"
+    assert (tmp_path / "dQw4w9WgXcQ" / "transcript.json").is_file()
 
 
 def test_process_cache_hit_skips_remote_loading_and_keeps_current_index(

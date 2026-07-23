@@ -2,7 +2,7 @@
 
 import json
 import subprocess
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
@@ -17,6 +17,12 @@ from tubetalk.domain.summary import (
 )
 from tubetalk.domain.transcript_index import transcript_sha256
 from tubetalk.domain.video_status import VideoStatus
+from tubetalk.domain.vision import (
+    VISION_SCHEMA_VERSION,
+    VisionIndexEntry,
+    VisionManifest,
+    YouTubeUrlVisionSource,
+)
 from tubetalk.pipeline.loader import YouTubeLoader
 from tubetalk.ports.embedding import EmbeddingProvider, EmbeddingProviderError
 from tubetalk.ports.summary import SummaryProvider, SummaryProviderError
@@ -25,6 +31,7 @@ from tubetalk.ports.transcript_index_repository import (
     TranscriptIndexRepositoryError,
     TranscriptIndexStatus,
 )
+from tubetalk.ports.vision import VisionAnalyzer, VisionProviderError
 
 
 class VideoServiceError(Exception):
@@ -70,6 +77,15 @@ class SummaryResult:
 
 
 @dataclass(frozen=True)
+class VisionResult:
+    """Outcome of checking or generating a cached visual scene index."""
+
+    state: str
+    scene_count: Optional[int] = None
+    warning: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class ProcessResult:
     """Outcome of processing a video URL into the local cache."""
 
@@ -78,6 +94,7 @@ class ProcessResult:
     transcript_segments: int
     indexing: IndexingResult
     summary: SummaryResult
+    vision: VisionResult = field(default_factory=lambda: VisionResult(state="missing"))
 
 
 class VideoService:
@@ -90,9 +107,12 @@ class VideoService:
         embedding_provider_factory: Callable[[], EmbeddingProvider],
         transcript_index_repository_factory: Callable[[str], TranscriptIndexRepository],
         summary_provider_factory: Callable[[], SummaryProvider],
+        vision_analyzer_factory: Callable[[], VisionAnalyzer],
         summary_model: str,
         summary_prompt_version: str,
         summary_language: str,
+        vision_model: str,
+        vision_prompt_version: str,
     ) -> None:
         """Create a service with explicit infrastructure dependencies."""
         self._cache = cache
@@ -100,9 +120,12 @@ class VideoService:
         self._transcript_index_repository_factory = transcript_index_repository_factory
         self._embedding_provider_factory = embedding_provider_factory
         self._summary_provider_factory = summary_provider_factory
+        self._vision_analyzer_factory = vision_analyzer_factory
         self._summary_model = summary_model
         self._summary_prompt_version = summary_prompt_version
         self._summary_language = summary_language
+        self._vision_model = vision_model
+        self._vision_prompt_version = vision_prompt_version
 
     def process(self, url: str) -> ProcessResult:
         """Fetch or reuse a video cache, then bring its index up to date."""
@@ -119,6 +142,7 @@ class VideoService:
                 transcript_segments=len(transcript),
                 indexing=self._sync_transcript_index(video_id, metadata, transcript),
                 summary=self._sync_summary(video_id, metadata, transcript),
+                vision=self._sync_vision_index(video_id, metadata),
             )
 
         try:
@@ -149,6 +173,7 @@ class VideoService:
             transcript_segments=len(transcript),
             indexing=self._sync_transcript_index(video_id, metadata, transcript),
             summary=self._sync_summary(video_id, metadata, transcript),
+            vision=self._sync_vision_index(video_id, metadata),
         )
 
     def list_statuses(self) -> list[VideoStatus]:
@@ -289,6 +314,48 @@ class VideoService:
             return SummaryResult(state="generated", summary=summary)
         except (OSError, SummaryProviderError, ValueError) as error:
             return SummaryResult(state="warning", warning=str(error))
+
+    def _sync_vision_index(
+        self, video_id: str, metadata: dict[str, Any]
+    ) -> VisionResult:
+        """Reuse or generate visual scenes without affecting text-cache success."""
+        source_url = metadata.get("source_url")
+        if not isinstance(source_url, str) or not source_url:
+            return VisionResult(
+                state="warning", warning="Cached metadata does not contain a source URL"
+            )
+        try:
+            status = self._cache.get_vision_index_status(
+                video_id,
+                source_url=source_url,
+                model=self._vision_model,
+                prompt_version=self._vision_prompt_version,
+            )
+            if status.state == "current" and status.entry is not None:
+                return VisionResult(
+                    state="current", scene_count=len(status.entry.scenes)
+                )
+            analyzer = self._vision_analyzer_factory()
+            scenes = analyzer.describe(
+                YouTubeUrlVisionSource(source_url),
+                title=self._video_title(video_id, metadata),
+            )
+            self._cache.save_vision_index(
+                video_id,
+                VisionIndexEntry(
+                    scenes=scenes,
+                    manifest=VisionManifest(
+                        schema_version=VISION_SCHEMA_VERSION,
+                        source_url=source_url,
+                        model=self._vision_model,
+                        prompt_version=self._vision_prompt_version,
+                        generated_at=datetime.now(timezone.utc).isoformat(),
+                    ),
+                ),
+            )
+            return VisionResult(state="generated", scene_count=len(scenes))
+        except (OSError, ValueError, VisionProviderError) as error:
+            return VisionResult(state="warning", warning=str(error))
 
     @staticmethod
     def _video_title(video_id: str, metadata: dict[str, Any]) -> str:

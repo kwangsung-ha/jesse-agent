@@ -26,7 +26,7 @@
   - Gemini 2.5 Pro 기반 요약 & 타임스탬프 목차 프롬프트 엔지니어링
 
 ## Phase 2: Vision Scene Indexing 파이프라인
-- [i] **Task 04: Gemini 직접 비디오 씬 분석 기반 (`infrastructure/visions/`)** `docs/tasks/04-gemini-video-analysis.md`
+- [x] **Task 04: Gemini 직접 비디오 씬 분석 기반 (`infrastructure/visions/`)** `docs/tasks/04-gemini-video-analysis.md`
   - 공개 YouTube URL 직접 분석 및 timestamped scene description 캐시
   - 로컬 프레임/모델 provider로 확장 가능한 vision interface
 

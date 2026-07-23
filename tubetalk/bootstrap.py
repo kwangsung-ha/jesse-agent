@@ -9,10 +9,12 @@ from tubetalk.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
 )
 from tubetalk.infrastructure.summaries.gemini import GeminiSummaryProvider
+from tubetalk.infrastructure.visions.gemini import GeminiVisionAnalyzer
 from tubetalk.pipeline.loader import YouTubeLoader
 from tubetalk.ports.embedding import EmbeddingProvider
 from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import TranscriptIndexRepository
+from tubetalk.ports.vision import VisionAnalyzer
 from tubetalk.services.video_service import VideoService
 
 
@@ -24,9 +26,12 @@ def create_video_service(config: Settings = settings) -> VideoService:
         embedding_provider_factory=_embedding_provider_factory(config),
         transcript_index_repository_factory=_repository_factory(config),
         summary_provider_factory=_summary_provider_factory(config),
+        vision_analyzer_factory=_vision_analyzer_factory(config),
         summary_model=config.summary_model,
         summary_prompt_version=config.summary_prompt_version,
         summary_language=config.summary_language,
+        vision_model=config.vision_model,
+        vision_prompt_version=config.vision_prompt_version,
     )
 
 
@@ -60,4 +65,12 @@ def _summary_provider_factory(config: Settings) -> Callable[[], SummaryProvider]
     return lambda: GeminiSummaryProvider(
         api_key=config.gemini_api_key,
         model=config.summary_model,
+    )
+
+
+def _vision_analyzer_factory(config: Settings) -> Callable[[], VisionAnalyzer]:
+    """Create the configured public-URL vision analyzer lazily."""
+    return lambda: GeminiVisionAnalyzer(
+        api_key=config.gemini_api_key,
+        model=config.vision_model,
     )

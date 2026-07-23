@@ -13,6 +13,7 @@ def test_create_video_service_selects_gemini_and_chroma(
     """The default supported settings build the installed adapters lazily."""
     gemini_provider = mocker.patch("tubetalk.bootstrap.GeminiEmbeddingProvider")
     summary_provider = mocker.patch("tubetalk.bootstrap.GeminiSummaryProvider")
+    vision_analyzer = mocker.patch("tubetalk.bootstrap.GeminiVisionAnalyzer")
     chroma_repository = mocker.patch(
         "tubetalk.bootstrap.ChromaTranscriptIndexRepository"
     )
@@ -21,10 +22,12 @@ def test_create_video_service_selects_gemini_and_chroma(
     provider = service._embedding_provider_factory()
     repository = service._transcript_index_repository_factory("video123")
     summary = service._summary_provider_factory()
+    vision = service._vision_analyzer_factory()
 
     assert provider is gemini_provider.return_value
     assert repository is chroma_repository.return_value
     assert summary is summary_provider.return_value
+    assert vision is vision_analyzer.return_value
     gemini_provider.assert_called_once_with(
         api_key="key", model="gemini-embedding-2", dimension=768
     )
@@ -37,3 +40,4 @@ def test_create_video_service_selects_gemini_and_chroma(
     summary_provider.assert_called_once_with(
         api_key="key", model="gemini-3.5-flash-lite"
     )
+    vision_analyzer.assert_called_once_with(api_key="key", model="gemini-3.5-flash")

@@ -241,6 +241,40 @@ def test_vision_index_cache_round_trip_and_freshness(tmp_path: Path) -> None:
     assert stale.state == "stale"
 
 
+def test_video_status_includes_current_vision_metadata(tmp_path: Path) -> None:
+    """Status should expose vision-index freshness and generation provenance."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    cache.save_json(
+        "vid1",
+        "metadata.json",
+        {
+            "title": "Example",
+            "source_url": "https://www.youtube.com/watch?v=vid1",
+        },
+    )
+    cache.save_json("vid1", "transcript.json", [])
+    cache.save_vision_index(
+        "vid1",
+        VisionIndexEntry(
+            scenes=(VisionScene(0, 3, "A slide is shown.", ("slide",)),),
+            manifest=VisionManifest(
+                schema_version=VISION_SCHEMA_VERSION,
+                source_url="https://www.youtube.com/watch?v=vid1",
+                model="gemini-3.5-flash",
+                prompt_version="vision-scenes-v1",
+                generated_at="2026-07-24T00:00:00+00:00",
+            ),
+        ),
+    )
+
+    status = cache.get_video_status("vid1")
+
+    assert status is not None
+    assert status.vision_index_state == "current"
+    assert status.vision_scene_count == 1
+    assert status.vision_model == "gemini-3.5-flash"
+
+
 def test_video_status_includes_current_summary_metadata(tmp_path: Path) -> None:
     """Status should expose summary freshness and generation provenance."""
     cache = LocalCacheManager(data_dir=tmp_path)

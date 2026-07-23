@@ -71,6 +71,7 @@ def process(url: str = typer.Argument(..., metavar="YOUTUBE_URL")) -> None:
         )
     _show_indexing_result(result)
     _show_process_summary(result)
+    _show_process_vision(result)
     try:
         _show_detail(service.get_status(result.video_id))
     except VideoNotFoundError as error:
@@ -166,6 +167,21 @@ def _show_process_summary(result: ProcessResult) -> None:
         _show_summary(result.summary.summary)
 
 
+def _show_process_vision(result: ProcessResult) -> None:
+    """Render the non-fatal visual-scene indexing outcome."""
+    if result.vision.warning:
+        console.print(
+            "[yellow]Warning: vision index was not updated: "
+            f"{result.vision.warning}[/yellow]"
+        )
+    elif result.vision.state == "generated":
+        console.print(
+            f"[green]Generated {result.vision.scene_count} visual scenes.[/green]"
+        )
+    elif result.vision.state == "current":
+        console.print("[dim]Vision index is current.[/dim]")
+
+
 def _show_summary(summary: VideoSummary) -> None:
     """Render a summary and its timestamp chapters consistently across commands."""
     console.print("[bold cyan]Summary[/bold cyan]")
@@ -209,7 +225,7 @@ def _show_all(videos: list[VideoStatus]) -> None:
             str(video.transcript_segments),
             _format_index_summary(video),
             _format_summary_summary(video),
-            "✅" if video.has_vision_index else "—",
+            _format_vision_summary(video),
         )
     console.print(table)
 
@@ -259,7 +275,16 @@ def _show_detail(status_info: VideoStatus) -> None:
         ("Summary Prompt", status_info.summary_prompt_version or "—"),
         ("Summary Language", status_info.summary_language or "—"),
         ("Summary Generated At", status_info.summary_generated_at or "—"),
-        ("Vision Index", "✅" if status_info.has_vision_index else "❌"),
+        ("Vision Index", _format_vision_state(status_info)),
+        (
+            "Vision Scenes",
+            str(status_info.vision_scene_count)
+            if status_info.vision_scene_count is not None
+            else "—",
+        ),
+        ("Vision Model", status_info.vision_model or "—"),
+        ("Vision Prompt", status_info.vision_prompt_version or "—"),
+        ("Vision Generated At", status_info.vision_generated_at or "—"),
         ("Cached At", status_info.cached_at or "—"),
     ]
     for key, value in rows:
@@ -315,5 +340,31 @@ def _format_summary_state(status_info: VideoStatus) -> str:
     if status_info.summary_state == "stale":
         return "⚠️ Stale"
     if status_info.summary_state == "invalid":
+        return "❌ Invalid"
+    return "❌ Missing"
+
+
+def _format_vision_summary(status_info: VideoStatus) -> str:
+    """Format visual-scene index freshness for the all-videos table."""
+    if status_info.vision_index_state == "current":
+        return (
+            f"✅ {status_info.vision_scene_count}"
+            if status_info.vision_scene_count is not None
+            else "✅"
+        )
+    if status_info.vision_index_state == "stale":
+        return "⚠️ stale"
+    if status_info.vision_index_state == "invalid":
+        return "❌ invalid"
+    return "—"
+
+
+def _format_vision_state(status_info: VideoStatus) -> str:
+    """Format visual-scene index freshness for a detail view."""
+    if status_info.vision_index_state == "current":
+        return "✅ Current"
+    if status_info.vision_index_state == "stale":
+        return "⚠️ Stale"
+    if status_info.vision_index_state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"

@@ -21,7 +21,7 @@ local-frame or local-model implementation without changing application services.
 
 - [x] **Check 4.1**: Add vision domain models, Gemini URL-video analyzer,
   cache freshness support, default model configuration, and mocked unit tests.
-- [ ] **Check 4.2**: Wire vision generation into `process`, preserve cached
+- [x] **Check 4.2**: Wire vision generation into `process`, preserve cached
   resources on failure, and expose freshness through `status`.
-- [ ] **Check 4.3**: Run `poetry run poe check`, review, and commit the
+- [x] **Check 4.3**: Run `poetry run poe check`, review, and commit the
   completed task.

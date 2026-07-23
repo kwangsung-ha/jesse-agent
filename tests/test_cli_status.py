@@ -1,10 +1,11 @@
 """CLI adapter tests using a mocked application service."""
 
+from dataclasses import replace
 from typing import Any
 
 from typer.testing import CliRunner
 
-from tubetalk.cli.main import app
+from tubetalk.cli.main import _format_vision_state, _format_vision_summary, app
 from tubetalk.domain.summary import Chapter, VideoSummary
 from tubetalk.services.video_service import (
     IndexingResult,
@@ -102,6 +103,23 @@ def test_status_not_found_maps_service_error_to_exit_code(mocker: Any) -> None:
 
     assert result.exit_code == 1
     assert "not found" in result.output
+
+
+def test_vision_status_formatters_show_freshness_and_scene_count() -> None:
+    """Vision freshness should have concise list and detailed renderings."""
+    missing = _status()
+    current = replace(missing, vision_index_state="current", vision_scene_count=4)
+    stale = replace(missing, vision_index_state="stale")
+    invalid = replace(missing, vision_index_state="invalid")
+
+    assert _format_vision_summary(missing) == "—"
+    assert _format_vision_summary(current) == "✅ 4"
+    assert _format_vision_summary(stale) == "⚠️ stale"
+    assert _format_vision_summary(invalid) == "❌ invalid"
+    assert _format_vision_state(current) == "✅ Current"
+    assert _format_vision_state(stale) == "⚠️ Stale"
+    assert _format_vision_state(invalid) == "❌ Invalid"
+    assert _format_vision_state(missing) == "❌ Missing"
 
 
 def test_process_renders_cache_miss_and_index_result(mocker: Any) -> None:

@@ -197,14 +197,31 @@ class LocalCacheManager:
         title: Optional[str] = None
         duration: Optional[float] = None
         channel: Optional[str] = None
+        metadata: dict[str, Any] = {}
         if has_metadata:
             try:
-                meta = json.loads((video_dir / "metadata.json").read_text())
-                title = meta.get("title")
-                duration = meta.get("duration")
-                channel = meta.get("channel")
+                loaded_metadata = json.loads((video_dir / "metadata.json").read_text())
+                if isinstance(loaded_metadata, dict):
+                    metadata = loaded_metadata
+                title = metadata.get("title")
+                duration = metadata.get("duration")
+                channel = metadata.get("channel")
             except (json.JSONDecodeError, OSError):
                 pass
+
+        vision_status = VisionIndexStatus(state="missing")
+        source_url = metadata.get("source_url")
+        if has_vision_index:
+            if isinstance(source_url, str) and source_url:
+                vision_status = self.get_vision_index_status(
+                    video_id,
+                    source_url=source_url,
+                    model=settings.vision_model,
+                    prompt_version=settings.vision_prompt_version,
+                )
+            else:
+                vision_status = VisionIndexStatus(state="invalid")
+        vision_entry = vision_status.entry
 
         transcript_count = 0
         transcript: list[dict[str, Any]] = []
@@ -279,6 +296,15 @@ class LocalCacheManager:
                 else None
             ),
             cached_at=cached_at,
+            vision_index_state=vision_status.state,
+            vision_scene_count=(len(vision_entry.scenes) if vision_entry else None),
+            vision_model=(vision_entry.manifest.model if vision_entry else None),
+            vision_prompt_version=(
+                vision_entry.manifest.prompt_version if vision_entry else None
+            ),
+            vision_generated_at=(
+                vision_entry.manifest.generated_at if vision_entry else None
+            ),
         )
 
     def _get_transcript_index_status(self, video_dir: Path) -> dict[str, Any]:
