@@ -1,40 +1,43 @@
 """Typed local-video status shared by cache and application services."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
+
+from tubetalk.domain.state import CacheState
 
 
 class VectorIndexStatus(BaseModel):
     """Presentation-neutral status for one vector index."""
 
-    state: str
+    state: CacheState
     item_count: Optional[int]
     embedding_model: Optional[str]
     embedding_dimension: Optional[int]
-    indexed_at: Optional[str]
+    indexed_at: Optional[datetime]
 
 
 class SummaryStatus(BaseModel):
     """Presentation-neutral status and provenance for a transcript summary."""
 
-    state: str
+    state: CacheState
     chapter_count: Optional[int]
     model: Optional[str]
     prompt_version: Optional[str]
     language: Optional[str]
-    generated_at: Optional[str]
+    generated_at: Optional[datetime]
 
 
 class VisionStatus(BaseModel):
     """Presentation-neutral status and provenance for visual scenes."""
 
-    state: str
+    state: CacheState
     scene_count: Optional[int]
     model: Optional[str]
     prompt_version: Optional[str]
-    generated_at: Optional[str]
+    generated_at: Optional[datetime]
 
 
 class VideoStatusDetails(BaseModel):
@@ -59,28 +62,28 @@ class VideoStatus:
     has_transcript: bool
     has_vision_index: bool
     transcript_segments: int
-    transcript_index_state: str
+    transcript_index_state: CacheState
     transcript_index_chunks: Optional[int]
     transcript_index_model: Optional[str]
     transcript_index_dimension: Optional[int]
-    transcript_indexed_at: Optional[str]
-    summary_state: str
+    transcript_indexed_at: Optional[datetime]
+    summary_state: CacheState
     summary_chapters: Optional[int]
     summary_model: Optional[str]
     summary_prompt_version: Optional[str]
     summary_language: Optional[str]
-    summary_generated_at: Optional[str]
+    summary_generated_at: Optional[datetime]
     cached_at: Optional[str]
-    vision_index_state: str = "missing"
+    vision_index_state: CacheState = CacheState.MISSING
     vision_scene_count: Optional[int] = None
     vision_model: Optional[str] = None
     vision_prompt_version: Optional[str] = None
-    vision_generated_at: Optional[str] = None
-    vision_vector_index_state: str = "missing"
+    vision_generated_at: Optional[datetime] = None
+    vision_vector_index_state: CacheState = CacheState.MISSING
     vision_vector_index_scenes: Optional[int] = None
     vision_vector_index_model: Optional[str] = None
     vision_vector_index_dimension: Optional[int] = None
-    vision_vector_indexed_at: Optional[str] = None
+    vision_vector_indexed_at: Optional[datetime] = None
 
     @property
     def details(self) -> VideoStatusDetails:

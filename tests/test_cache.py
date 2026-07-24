@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 
 from tubetalk.core.cache import LocalCacheManager
@@ -418,7 +419,9 @@ def test_get_video_status_includes_current_transcript_index(tmp_path: Path) -> N
     assert status.transcript_index_chunks == 1
     assert status.transcript_index_model == "gemini-embedding-2"
     assert status.transcript_index_dimension == 768
-    assert status.transcript_indexed_at == "2026-07-23T00:00:00+00:00"
+    assert status.transcript_indexed_at == datetime.fromisoformat(
+        "2026-07-23T00:00:00+00:00"
+    )
 
 
 def test_get_video_status_marks_changed_transcript_index_stale(tmp_path: Path) -> None:

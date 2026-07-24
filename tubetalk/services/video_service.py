@@ -10,6 +10,7 @@ from typing import Callable, Optional
 from youtube_transcript_api._errors import YouTubeTranscriptApiException
 
 from tubetalk.core.cache import LocalCacheManager
+from tubetalk.domain.state import CacheState, SyncState
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     SummaryCacheEntry,
@@ -71,7 +72,7 @@ class SummaryGenerationError(VideoServiceError):
 class IndexingResult:
     """Outcome of checking or updating a transcript vector index."""
 
-    state: str
+    state: SyncState
     chunk_count: Optional[int] = None
     warning: Optional[str] = None
 
@@ -80,7 +81,7 @@ class IndexingResult:
 class SummaryResult:
     """Outcome of checking or updating a cached video summary."""
 
-    state: str
+    state: SyncState
     summary: Optional[VideoSummary] = None
     warning: Optional[str] = None
 
@@ -89,11 +90,11 @@ class SummaryResult:
 class VisionResult:
     """Outcome of checking or generating a cached visual scene index."""
 
-    state: str
+    state: SyncState
     scene_count: Optional[int] = None
     warning: Optional[str] = None
     indexing: IndexingResult = field(
-        default_factory=lambda: IndexingResult(state="missing")
+        default_factory=lambda: IndexingResult(state=SyncState.MISSING)
     )
 
 
@@ -117,7 +118,9 @@ class ProcessResult:
     transcript_segments: int
     indexing: IndexingResult
     summary: SummaryResult
-    vision: VisionResult = field(default_factory=lambda: VisionResult(state="missing"))
+    vision: VisionResult = field(
+        default_factory=lambda: VisionResult(state=SyncState.MISSING)
+    )
     timing: ProcessTiming = field(default_factory=ProcessTiming)
 
 
@@ -263,8 +266,8 @@ class VideoService:
             prompt_version=self._summary_prompt_version,
             language=self._summary_language,
         )
-        if status.state == "current" and status.entry is not None:
-            return SummaryResult(state="current", summary=status.entry.summary)
+        if status.state == CacheState.CURRENT and status.entry is not None:
+            return SummaryResult(state=SyncState.CURRENT, summary=status.entry.summary)
         if not generate:
             raise SummaryUnavailableError(
                 f"Summary for '{video_id}' is {status.state}. "
@@ -289,7 +292,7 @@ class VideoService:
             repository = self._transcript_index_repository_factory(video_id)
             index_status = repository.get_index_status(transcript)
         except (OSError, TranscriptIndexRepositoryError):
-            index_status = TranscriptIndexStatus(state="invalid")
+            index_status = TranscriptIndexStatus(state=CacheState.INVALID)
         vision_vector_status = self._vision_vector_status(video_id)
         return replace(
             status,
@@ -320,20 +323,20 @@ class VideoService:
         try:
             repository = self._transcript_index_repository_factory(video_id)
             if not repository.needs_indexing(transcript):
-                return IndexingResult(state="current")
+                return IndexingResult(state=SyncState.CURRENT)
 
             provider = self._embedding_provider_factory()
             chunk_count = repository.index_transcript(
                 transcript, self._video_title(metadata), provider
             )
-            return IndexingResult(state="indexed", chunk_count=chunk_count)
+            return IndexingResult(state=SyncState.INDEXED, chunk_count=chunk_count)
         except (
             EmbeddingProviderError,
             OSError,
             TranscriptIndexRepositoryError,
             ValueError,
         ) as error:
-            return IndexingResult(state="warning", warning=str(error))
+            return IndexingResult(state=SyncState.WARNING, warning=str(error))
 
     def _sync_summary(
         self,
@@ -350,8 +353,10 @@ class VideoService:
                 prompt_version=self._summary_prompt_version,
                 language=self._summary_language,
             )
-            if status.state == "current" and status.entry is not None:
-                return SummaryResult(state="current", summary=status.entry.summary)
+            if status.state == CacheState.CURRENT and status.entry is not None:
+                return SummaryResult(
+                    state=SyncState.CURRENT, summary=status.entry.summary
+                )
 
             provider = self._summary_provider_factory()
             summary = provider.generate_summary(
@@ -369,13 +374,13 @@ class VideoService:
                         model=self._summary_model,
                         prompt_version=self._summary_prompt_version,
                         language=self._summary_language,
-                        generated_at=datetime.now(timezone.utc).isoformat(),
+                        generated_at=datetime.now(timezone.utc),
                     ),
                 ),
             )
-            return SummaryResult(state="generated", summary=summary)
+            return SummaryResult(state=SyncState.GENERATED, summary=summary)
         except (OSError, SummaryProviderError, ValueError) as error:
-            return SummaryResult(state="warning", warning=str(error))
+            return SummaryResult(state=SyncState.WARNING, warning=str(error))
 
     def _sync_vision_index(
         self, video_id: str, metadata: VideoMetadata
@@ -385,7 +390,7 @@ class VideoService:
         duration = metadata.duration_sec
         if duration is None:
             return VisionResult(
-                state="warning",
+                state=SyncState.WARNING,
                 warning="Cached metadata does not contain a valid duration",
             )
         try:
@@ -395,9 +400,9 @@ class VideoService:
                 model=self._vision_model,
                 prompt_version=self._vision_prompt_version,
             )
-            if status.state == "current" and status.entry is not None:
+            if status.state == CacheState.CURRENT and status.entry is not None:
                 return VisionResult(
-                    state="current",
+                    state=SyncState.CURRENT,
                     scene_count=len(status.entry.scenes),
                     indexing=self._sync_vision_vectors(
                         video_id, metadata, status.entry.scenes
@@ -418,17 +423,17 @@ class VideoService:
                         source_url=source_url,
                         model=self._vision_model,
                         prompt_version=self._vision_prompt_version,
-                        generated_at=datetime.now(timezone.utc).isoformat(),
+                        generated_at=datetime.now(timezone.utc),
                     ),
                 ),
             )
             return VisionResult(
-                state="generated",
+                state=SyncState.GENERATED,
                 scene_count=len(scenes),
                 indexing=self._sync_vision_vectors(video_id, metadata, scenes),
             )
         except (OSError, ValueError, VisionProviderError) as error:
-            return VisionResult(state="warning", warning=str(error))
+            return VisionResult(state=SyncState.WARNING, warning=str(error))
 
     def _sync_vision_vectors(
         self, video_id: str, metadata: VideoMetadata, scenes: tuple[VisionScene, ...]
@@ -437,19 +442,19 @@ class VideoService:
         try:
             repository = self._vision_index_repository_factory(video_id)
             if not repository.needs_indexing(scenes):
-                return IndexingResult(state="current")
+                return IndexingResult(state=SyncState.CURRENT)
             provider = self._embedding_provider_factory()
             count = repository.index_scenes(
                 scenes, self._video_title(metadata), provider
             )
-            return IndexingResult(state="indexed", chunk_count=count)
+            return IndexingResult(state=SyncState.INDEXED, chunk_count=count)
         except (
             EmbeddingProviderError,
             OSError,
             ValueError,
             VisionIndexRepositoryError,
         ) as error:
-            return IndexingResult(state="warning", warning=str(error))
+            return IndexingResult(state=SyncState.WARNING, warning=str(error))
 
     def _vision_vector_status(self, video_id: str) -> VisionVectorIndexStatus:
         """Read the scene-vector manifest without invoking an embedding provider."""
@@ -465,7 +470,7 @@ class VideoService:
                 vision_entry.scenes if vision_entry else None
             )
         except (OSError, ValueError, VisionIndexRepositoryError):
-            return VisionVectorIndexStatus(state="invalid")
+            return VisionVectorIndexStatus(state=CacheState.INVALID)
 
     @staticmethod
     def _video_title(metadata: VideoMetadata) -> str:

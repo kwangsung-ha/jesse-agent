@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from tubetalk.core.config import settings
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     Chapter,
@@ -110,7 +111,7 @@ class LocalCacheManager:
                 "model": entry.manifest.model,
                 "prompt_version": entry.manifest.prompt_version,
                 "language": entry.manifest.language,
-                "generated_at": entry.manifest.generated_at,
+                "generated_at": entry.manifest.generated_at.isoformat(),
             },
         )
 
@@ -126,11 +127,11 @@ class LocalCacheManager:
         """Return whether a cached summary matches its transcript and settings."""
         summary_path = self._data_dir / video_id / "summary.json"
         if not summary_path.is_file():
-            return SummaryCacheStatus(state="missing")
+            return SummaryCacheStatus(state=CacheState.MISSING)
         try:
             entry = _summary_cache_entry(json.loads(summary_path.read_text()))
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return SummaryCacheStatus(state="invalid")
+            return SummaryCacheStatus(state=CacheState.INVALID)
         manifest = entry.manifest
         if (
             manifest.transcript_sha256 != transcript_sha256(transcript)
@@ -138,8 +139,8 @@ class LocalCacheManager:
             or manifest.prompt_version != prompt_version
             or manifest.language != language
         ):
-            return SummaryCacheStatus(state="stale", entry=entry)
-        return SummaryCacheStatus(state="current", entry=entry)
+            return SummaryCacheStatus(state=CacheState.STALE, entry=entry)
+        return SummaryCacheStatus(state=CacheState.CURRENT, entry=entry)
 
     def save_vision_index(self, video_id: str, entry: VisionIndexEntry) -> None:
         """Persist generated visual scenes and their generation provenance."""
@@ -160,7 +161,7 @@ class LocalCacheManager:
                 "source_url": entry.manifest.source_url,
                 "model": entry.manifest.model,
                 "prompt_version": entry.manifest.prompt_version,
-                "generated_at": entry.manifest.generated_at,
+                "generated_at": entry.manifest.generated_at.isoformat(),
             },
         )
 
@@ -175,19 +176,19 @@ class LocalCacheManager:
         """Return whether a visual index matches its source and settings."""
         vision_path = self._data_dir / video_id / "vision_index.json"
         if not vision_path.is_file():
-            return VisionIndexStatus(state="missing")
+            return VisionIndexStatus(state=CacheState.MISSING)
         try:
             entry = _vision_index_entry(json.loads(vision_path.read_text()))
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return VisionIndexStatus(state="invalid")
+            return VisionIndexStatus(state=CacheState.INVALID)
         manifest = entry.manifest
         if (
             manifest.source_url != source_url
             or manifest.model != model
             or manifest.prompt_version != prompt_version
         ):
-            return VisionIndexStatus(state="stale", entry=entry)
-        return VisionIndexStatus(state="current", entry=entry)
+            return VisionIndexStatus(state=CacheState.STALE, entry=entry)
+        return VisionIndexStatus(state=CacheState.CURRENT, entry=entry)
 
     # ------------------------------------------------------------------
     # Listing / status helpers
@@ -235,7 +236,7 @@ class LocalCacheManager:
             except (json.JSONDecodeError, OSError):
                 pass
 
-        vision_status = VisionIndexStatus(state="missing")
+        vision_status = VisionIndexStatus(state=CacheState.MISSING)
         source_url = metadata.get("source_url")
         if has_vision_index:
             if isinstance(source_url, str) and source_url:
@@ -246,7 +247,7 @@ class LocalCacheManager:
                     prompt_version=settings.vision_prompt_version,
                 )
             else:
-                vision_status = VisionIndexStatus(state="invalid")
+                vision_status = VisionIndexStatus(state=CacheState.INVALID)
         vision_entry = vision_status.entry
 
         transcript_count = 0
@@ -285,7 +286,9 @@ class LocalCacheManager:
             has_transcript=has_transcript,
             has_vision_index=has_vision_index,
             transcript_segments=transcript_count,
-            transcript_index_state=str(transcript_index["transcript_index_state"]),
+            transcript_index_state=CacheState(
+                str(transcript_index["transcript_index_state"])
+            ),
             transcript_index_chunks=_optional_int(
                 transcript_index["transcript_index_chunks"]
             ),
@@ -295,7 +298,7 @@ class LocalCacheManager:
             transcript_index_dimension=_optional_int(
                 transcript_index["transcript_index_dimension"]
             ),
-            transcript_indexed_at=_optional_string(
+            transcript_indexed_at=_optional_datetime(
                 transcript_index["transcript_indexed_at"]
             ),
             summary_state=summary_status.state,
@@ -388,6 +391,15 @@ def _optional_string(value: Any) -> Optional[str]:
     return value if isinstance(value, str) else None
 
 
+def _optional_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _optional_int(value: Any) -> Optional[int]:
     return value if isinstance(value, int) else None
 
@@ -412,7 +424,7 @@ def _summary_cache_entry(data: Any) -> SummaryCacheEntry:
         model=_required_text(data, "model"),
         prompt_version=_required_text(data, "prompt_version"),
         language=_required_text(data, "language"),
-        generated_at=_required_text(data, "generated_at"),
+        generated_at=datetime.fromisoformat(_required_text(data, "generated_at")),
     )
     if manifest.schema_version != SUMMARY_SCHEMA_VERSION:
         raise ValueError("Unsupported summary cache schema version")
@@ -448,7 +460,7 @@ def _vision_index_entry(data: Any) -> VisionIndexEntry:
         source_url=_required_text(data, "source_url"),
         model=_required_text(data, "model"),
         prompt_version=_required_text(data, "prompt_version"),
-        generated_at=_required_text(data, "generated_at"),
+        generated_at=datetime.fromisoformat(_required_text(data, "generated_at")),
     )
     if manifest.schema_version != VISION_SCHEMA_VERSION:
         raise ValueError("Unsupported vision cache schema version")

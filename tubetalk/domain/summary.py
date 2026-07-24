@@ -1,7 +1,9 @@
 """Domain models for transcript-grounded video summaries."""
 
 from dataclasses import dataclass
-from typing import Literal
+from datetime import datetime
+
+from tubetalk.domain.state import CacheState
 
 SUMMARY_SCHEMA_VERSION = 1
 
@@ -46,7 +48,13 @@ class SummaryManifest:
     model: str
     prompt_version: str
     language: str
-    generated_at: str
+    generated_at: datetime
+
+    def __post_init__(self) -> None:
+        if isinstance(self.generated_at, str):
+            object.__setattr__(
+                self, "generated_at", datetime.fromisoformat(self.generated_at)
+            )
 
 
 @dataclass(frozen=True)
@@ -61,5 +69,5 @@ class SummaryCacheEntry:
 class SummaryCacheStatus:
     """The validity of a cached summary for the requested generation inputs."""
 
-    state: Literal["missing", "current", "stale", "invalid"]
+    state: CacheState
     entry: SummaryCacheEntry | None = None

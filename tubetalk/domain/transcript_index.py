@@ -3,6 +3,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from tubetalk.core.config import settings
@@ -34,7 +35,13 @@ class IndexManifest:
     embedding_dimension: int
     chunk_policy_version: str
     chunk_count: int
-    indexed_at: str
+    indexed_at: datetime
+
+    def __post_init__(self) -> None:
+        if isinstance(self.indexed_at, str):
+            object.__setattr__(
+                self, "indexed_at", datetime.fromisoformat(self.indexed_at)
+            )
 
 
 def chunk_transcript(

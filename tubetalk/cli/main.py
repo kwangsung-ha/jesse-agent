@@ -211,6 +211,11 @@ def _format_duration(seconds: float) -> str:
     return f"{seconds:.2f}s"
 
 
+def _format_datetime(value: datetime | None) -> str:
+    """Render a domain timestamp at the CLI boundary."""
+    return value.isoformat() if value is not None else "—"
+
+
 def _show_summary(summary: VideoSummary) -> None:
     """Render a summary and its timestamp chapters consistently across commands."""
     console.print("[bold cyan]Summary[/bold cyan]")
@@ -294,7 +299,10 @@ def _show_detail(status_info: VideoStatus) -> None:
             if details.transcript_index.embedding_dimension is not None
             else "—",
         ),
-        ("Transcript Indexed At", details.transcript_index.indexed_at or "—"),
+        (
+            "Transcript Indexed At",
+            _format_datetime(details.transcript_index.indexed_at),
+        ),
         ("Summary", _format_summary_state(status_info)),
         (
             "Summary Chapters",
@@ -305,7 +313,7 @@ def _show_detail(status_info: VideoStatus) -> None:
         ("Summary Model", details.summary.model or "—"),
         ("Summary Prompt", details.summary.prompt_version or "—"),
         ("Summary Language", details.summary.language or "—"),
-        ("Summary Generated At", details.summary.generated_at or "—"),
+        ("Summary Generated At", _format_datetime(details.summary.generated_at)),
         ("Vision Index", _format_vision_state(status_info)),
         (
             "Vision Scenes",
@@ -315,7 +323,7 @@ def _show_detail(status_info: VideoStatus) -> None:
         ),
         ("Vision Model", details.vision.model or "—"),
         ("Vision Prompt", details.vision.prompt_version or "—"),
-        ("Vision Generated At", details.vision.generated_at or "—"),
+        ("Vision Generated At", _format_datetime(details.vision.generated_at)),
         ("Vision Vector Index", _format_vision_vector_state(status_info)),
         (
             "Vision Vector Scenes",
@@ -330,7 +338,10 @@ def _show_detail(status_info: VideoStatus) -> None:
             if details.vision_vector_index.embedding_dimension is not None
             else "—",
         ),
-        ("Vision Indexed At", details.vision_vector_index.indexed_at or "—"),
+        (
+            "Vision Indexed At",
+            _format_datetime(details.vision_vector_index.indexed_at),
+        ),
         ("Cached At", status_info.cached_at or "—"),
     ]
     for key, value in rows:

@@ -50,7 +50,10 @@ class GeminiEmbeddingProvider:
         embeddings = response.embeddings
         if not embeddings or len(embeddings) != 1:
             raise ValueError("Gemini embedding response must contain one embedding")
-        values = list(embeddings[0].values)
+        raw_values = embeddings[0].values
+        if not isinstance(raw_values, list):
+            raise ValueError("Gemini embedding response must contain vector values")
+        values = [float(value) for value in raw_values]
         if len(values) != self.dimension:
             raise ValueError(
                 f"Gemini embedding dimension {len(values)} does not match "

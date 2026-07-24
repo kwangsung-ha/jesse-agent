@@ -2,8 +2,10 @@
 
 from abc import abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional, Protocol
 
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
 from tubetalk.ports.embedding import EmbeddingProvider
 
@@ -16,11 +18,11 @@ class TranscriptIndexRepositoryError(Exception):
 class TranscriptIndexStatus:
     """Repository-owned status data for a transcript index."""
 
-    state: str
+    state: CacheState
     chunk_count: Optional[int] = None
     embedding_model: Optional[str] = None
     embedding_dimension: Optional[int] = None
-    indexed_at: Optional[str] = None
+    indexed_at: Optional[datetime] = None
 
 
 class TranscriptIndexRepository(Protocol):

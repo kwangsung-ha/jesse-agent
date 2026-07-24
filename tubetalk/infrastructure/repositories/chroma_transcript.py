@@ -10,6 +10,7 @@ import chromadb
 from chromadb.errors import ChromaError
 
 from tubetalk.core.config import settings
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
@@ -61,13 +62,17 @@ class ChromaTranscriptIndexRepository:
     ) -> TranscriptIndexStatus:
         """Read manifest and collection state without exposing Chroma details."""
         if not self.manifest_path.is_file():
-            return TranscriptIndexStatus(state="missing")
+            return TranscriptIndexStatus(state=CacheState.MISSING)
         try:
-            manifest = IndexManifest(**json.loads(self.manifest_path.read_text()))
+            manifest_data = json.loads(self.manifest_path.read_text())
+            manifest_data["indexed_at"] = datetime.fromisoformat(
+                manifest_data["indexed_at"]
+            )
+            manifest = IndexManifest(**manifest_data)
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return TranscriptIndexStatus(state="invalid")
+            return TranscriptIndexStatus(state=CacheState.INVALID)
         status = TranscriptIndexStatus(
-            state="stale",
+            state=CacheState.STALE,
             chunk_count=manifest.chunk_count,
             embedding_model=manifest.embedding_model,
             embedding_dimension=manifest.embedding_dimension,
@@ -88,7 +93,7 @@ class ChromaTranscriptIndexRepository:
             )
         except (ChromaError, OSError, TypeError, ValueError):
             return TranscriptIndexStatus(
-                state="invalid",
+                state=CacheState.INVALID,
                 chunk_count=manifest.chunk_count,
                 embedding_model=manifest.embedding_model,
                 embedding_dimension=manifest.embedding_dimension,
@@ -96,7 +101,7 @@ class ChromaTranscriptIndexRepository:
             )
         return (
             TranscriptIndexStatus(
-                state="current",
+                state=CacheState.CURRENT,
                 chunk_count=manifest.chunk_count,
                 embedding_model=manifest.embedding_model,
                 embedding_dimension=manifest.embedding_dimension,
@@ -157,7 +162,7 @@ class ChromaTranscriptIndexRepository:
 
     def count(self) -> int:
         """Return the number of transcript chunks in this video's collection."""
-        return self._collection.count()
+        return int(self._collection.count())
 
     def _create_collection(self) -> Any:
         return self._client.get_or_create_collection(
@@ -178,6 +183,8 @@ class ChromaTranscriptIndexRepository:
             embedding_dimension=self.embedding_dimension,
             chunk_policy_version=CHUNK_POLICY_VERSION,
             chunk_count=chunk_count,
-            indexed_at=datetime.now(timezone.utc).isoformat(),
+            indexed_at=datetime.now(timezone.utc),
         )
-        self.manifest_path.write_text(json.dumps(asdict(manifest), indent=2) + "\n")
+        payload = asdict(manifest)
+        payload["indexed_at"] = manifest.indexed_at.isoformat()
+        self.manifest_path.write_text(json.dumps(payload, indent=2) + "\n")

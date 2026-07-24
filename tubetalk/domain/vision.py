@@ -1,7 +1,9 @@
 """Domain models for timestamped visual scene indexes."""
 
 from dataclasses import dataclass
-from typing import Literal
+from datetime import datetime
+
+from tubetalk.domain.state import CacheState
 
 VISION_SCHEMA_VERSION = 1
 
@@ -47,7 +49,13 @@ class VisionManifest:
     source_url: str
     model: str
     prompt_version: str
-    generated_at: str
+    generated_at: datetime
+
+    def __post_init__(self) -> None:
+        if isinstance(self.generated_at, str):
+            object.__setattr__(
+                self, "generated_at", datetime.fromisoformat(self.generated_at)
+            )
 
 
 @dataclass(frozen=True)
@@ -62,5 +70,5 @@ class VisionIndexEntry:
 class VisionIndexStatus:
     """Validity of a cached visual scene index for the requested settings."""
 
-    state: Literal["missing", "current", "stale", "invalid"]
+    state: CacheState
     entry: VisionIndexEntry | None = None

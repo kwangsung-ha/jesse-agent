@@ -11,6 +11,7 @@ import chromadb
 from chromadb.errors import ChromaError
 
 from tubetalk.core.config import settings
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
 from tubetalk.ports.embedding import EmbeddingProvider
 from tubetalk.ports.vision_index_repository import (
@@ -30,7 +31,7 @@ class VisionVectorManifest:
     embedding_model: str
     embedding_dimension: int
     scene_count: int
-    indexed_at: str
+    indexed_at: datetime
 
 
 class ChromaVisionIndexRepository:
@@ -65,15 +66,17 @@ class ChromaVisionIndexRepository:
         self, scenes: Optional[tuple[VisionScene, ...]]
     ) -> VisionVectorIndexStatus:
         if not self.manifest_path.is_file():
-            return VisionVectorIndexStatus(state="missing")
+            return VisionVectorIndexStatus(state=CacheState.MISSING)
         try:
-            manifest = VisionVectorManifest(
-                **json.loads(self.manifest_path.read_text())
+            manifest_data = json.loads(self.manifest_path.read_text())
+            manifest_data["indexed_at"] = datetime.fromisoformat(
+                manifest_data["indexed_at"]
             )
+            manifest = VisionVectorManifest(**manifest_data)
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return VisionVectorIndexStatus(state="invalid")
+            return VisionVectorIndexStatus(state=CacheState.INVALID)
         status = VisionVectorIndexStatus(
-            state="stale",
+            state=CacheState.STALE,
             scene_count=manifest.scene_count,
             embedding_model=manifest.embedding_model,
             embedding_dimension=manifest.embedding_dimension,
@@ -91,10 +94,10 @@ class ChromaVisionIndexRepository:
                 and manifest.scene_count == self.count()
             )
         except (ChromaError, OSError, TypeError, ValueError):
-            return VisionVectorIndexStatus(state="invalid")
+            return VisionVectorIndexStatus(state=CacheState.INVALID)
         return (
             VisionVectorIndexStatus(
-                state="current",
+                state=CacheState.CURRENT,
                 scene_count=manifest.scene_count,
                 embedding_model=manifest.embedding_model,
                 embedding_dimension=manifest.embedding_dimension,
@@ -153,7 +156,7 @@ class ChromaVisionIndexRepository:
         return len(scenes)
 
     def count(self) -> int:
-        return self._collection.count()
+        return int(self._collection.count())
 
     def _create_collection(self) -> Any:
         return self._client.get_or_create_collection(
@@ -173,9 +176,11 @@ class ChromaVisionIndexRepository:
             embedding_model=self.embedding_model,
             embedding_dimension=self.embedding_dimension,
             scene_count=len(scenes),
-            indexed_at=datetime.now(timezone.utc).isoformat(),
+            indexed_at=datetime.now(timezone.utc),
         )
-        self.manifest_path.write_text(json.dumps(asdict(manifest), indent=2) + "\n")
+        payload = asdict(manifest)
+        payload["indexed_at"] = manifest.indexed_at.isoformat()
+        self.manifest_path.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def format_scene_document(scene: VisionScene, title: str) -> str:
