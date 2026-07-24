@@ -35,7 +35,7 @@ def _make_store(
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     mocker.patch(
-        "tubetalk.infrastructure.repositories.chroma_vision.chromadb.PersistentClient",
+        "tubetalk.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
         return_value=client,
     )
     store = ChromaVisionIndexRepository(

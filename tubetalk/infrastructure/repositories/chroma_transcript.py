@@ -4,9 +4,8 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-import chromadb
 from chromadb.errors import ChromaError
 
 from tubetalk.domain.state import CacheState
@@ -21,6 +20,7 @@ from tubetalk.domain.transcript_index import (
     format_document,
     transcript_sha256,
 )
+from tubetalk.infrastructure.repositories.chroma_base import ChromaVectorRepositoryBase
 from tubetalk.ports.embedding import EmbeddingProvider
 from tubetalk.ports.transcript_index_repository import (
     TranscriptIndexRepositoryError,
@@ -28,7 +28,7 @@ from tubetalk.ports.transcript_index_repository import (
 )
 
 
-class ChromaTranscriptIndexRepository:
+class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
     """Persist a video's explicit transcript embeddings in local ChromaDB."""
 
     collection_name = "transcript_collection"
@@ -43,16 +43,15 @@ class ChromaTranscriptIndexRepository:
     ) -> None:
         """Open the Chroma database beneath the video's cache directory."""
         root_dir = data_dir or Path("./data")
-        self.video_id = video_id
-        self.path = root_dir / video_id / "chromadb"
-        self.manifest_path = root_dir / video_id / "index_manifest.json"
-        self.embedding_model = embedding_model
-        self.embedding_dimension = embedding_dimension
         self.chunk_policy = chunk_policy
         try:
-            self.path.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(self.path))
-            self._collection = self._create_collection()
+            self._initialize(
+                video_id=video_id,
+                data_dir=root_dir,
+                manifest_filename="index_manifest.json",
+                embedding_model=embedding_model,
+                embedding_dimension=embedding_dimension,
+            )
         except (ChromaError, OSError) as error:
             raise TranscriptIndexRepositoryError(str(error)) from error
 
@@ -67,7 +66,7 @@ class ChromaTranscriptIndexRepository:
         if not self.manifest_path.is_file():
             return TranscriptIndexStatus(state=CacheState.MISSING)
         try:
-            manifest_data = json.loads(self.manifest_path.read_text())
+            manifest_data = self._load_manifest_data()
             manifest_data["indexed_at"] = datetime.fromisoformat(
                 manifest_data["indexed_at"]
             )
@@ -121,22 +120,11 @@ class ChromaTranscriptIndexRepository:
         embedding_provider: EmbeddingProvider,
     ) -> int:
         """Rebuild the collection and persist an index manifest for segments."""
-        if (
-            embedding_provider.model != self.embedding_model
-            or embedding_provider.dimension != self.embedding_dimension
-        ):
-            raise ValueError(
-                "Embedding provider settings do not match the vector repository"
-            )
+        self._validate_provider(embedding_provider)
         chunks = chunk_transcript(transcript, self.chunk_policy)
         documents = [format_document(chunk.text, title) for chunk in chunks]
         embeddings = embedding_provider.embed_documents(documents)
-        if len(embeddings) != len(chunks):
-            raise ValueError("Embedding provider returned an unexpected vector count")
-        if any(len(vector) != self.embedding_dimension for vector in embeddings):
-            raise ValueError(
-                "Embedding provider returned an unexpected vector dimension"
-            )
+        self._validate_embeddings(embeddings, len(chunks))
         try:
             self._collection = self._recreate_collection()
             if chunks:
@@ -163,21 +151,6 @@ class ChromaTranscriptIndexRepository:
             raise TranscriptIndexRepositoryError(str(error)) from error
         return len(chunks)
 
-    def count(self) -> int:
-        """Return the number of transcript chunks in this video's collection."""
-        return int(self._collection.count())
-
-    def _create_collection(self) -> Any:
-        return self._client.get_or_create_collection(
-            name=self.collection_name,
-            metadata={"video_id": self.video_id, "hnsw:space": "cosine"},
-            embedding_function=None,
-        )
-
-    def _recreate_collection(self) -> Any:
-        self._client.delete_collection(name=self.collection_name)
-        return self._create_collection()
-
     def _save_manifest(self, transcript: Transcript, chunk_count: int) -> None:
         manifest = IndexManifest(
             schema_version=INDEX_SCHEMA_VERSION,
@@ -190,4 +163,4 @@ class ChromaTranscriptIndexRepository:
         )
         payload = asdict(manifest)
         payload["indexed_at"] = manifest.indexed_at.isoformat()
-        self.manifest_path.write_text(json.dumps(payload, indent=2) + "\n")
+        self._save_manifest_data(payload)
