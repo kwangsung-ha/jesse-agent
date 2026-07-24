@@ -6,6 +6,7 @@ import subprocess
 from typing import Any, Optional
 
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import YouTubeTranscriptApiException
 
 from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.domain.video import VideoMetadata
@@ -21,6 +22,14 @@ _YOUTUBE_RE = re.compile(
 )
 
 
+class VideoLoaderError(Exception):
+    """Raised when a YouTube adapter cannot collect video resources."""
+
+
+class InvalidVideoUrlError(VideoLoaderError, ValueError):
+    """Raised when a URL does not identify a supported YouTube video."""
+
+
 class YouTubeLoader:
     """Parse YouTube URLs and fetch transcript / metadata."""
 
@@ -33,7 +42,7 @@ class YouTubeLoader:
         """
         match = _YOUTUBE_RE.search(url)
         if not match:
-            raise ValueError(f"Cannot extract video_id from URL: {url}")
+            raise InvalidVideoUrlError(f"Cannot extract video_id from URL: {url}")
         return match.group("id")
 
     # ------------------------------------------------------------------
@@ -52,19 +61,23 @@ class YouTubeLoader:
         if languages is None:
             languages = ["ko", "en"]
 
-        ytt_api = YouTubeTranscriptApi()
-        transcript = ytt_api.fetch(video_id, languages=languages)
-
-        return Transcript(
-            segments=tuple(
-                TranscriptSegment(
-                    start_sec=round(seg.start, 3),
-                    duration_sec=round(seg.duration, 3),
-                    text=seg.text,
+        try:
+            ytt_api = YouTubeTranscriptApi()
+            transcript = ytt_api.fetch(video_id, languages=languages)
+            return Transcript(
+                segments=tuple(
+                    TranscriptSegment(
+                        start_sec=round(seg.start, 3),
+                        duration_sec=round(seg.duration, 3),
+                        text=seg.text,
+                    )
+                    for seg in transcript
                 )
-                for seg in transcript
             )
-        )
+        except (YouTubeTranscriptApiException, ValueError) as error:
+            raise VideoLoaderError(
+                f"Failed to fetch transcript for {video_id}: {error}"
+            ) from error
 
     # ------------------------------------------------------------------
     # Metadata (via yt-dlp)
@@ -76,29 +89,39 @@ class YouTubeLoader:
 
         Returns validated metadata for the requested video.
         """
-        result = subprocess.run(
-            [
-                "yt-dlp",
-                "--dump-json",
-                "--no-download",
-                "--no-warnings",
-                url,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        info: dict[str, Any] = json.loads(result.stdout)
-        return VideoMetadata(
-            video_id=video_id,
-            source_url=url,
-            title=_optional_text(info.get("title")),
-            channel=_optional_text(info.get("channel")),
-            duration_sec=_optional_number(info.get("duration")),
-            upload_date=_optional_text(info.get("upload_date")),
-            view_count=_optional_int(info.get("view_count")),
-            thumbnail_url=_optional_text(info.get("thumbnail")),
-        )
+        try:
+            result = subprocess.run(
+                [
+                    "yt-dlp",
+                    "--dump-json",
+                    "--no-download",
+                    "--no-warnings",
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            info: dict[str, Any] = json.loads(result.stdout)
+            return VideoMetadata(
+                video_id=video_id,
+                source_url=url,
+                title=_optional_text(info.get("title")),
+                channel=_optional_text(info.get("channel")),
+                duration_sec=_optional_number(info.get("duration")),
+                upload_date=_optional_text(info.get("upload_date")),
+                view_count=_optional_int(info.get("view_count")),
+                thumbnail_url=_optional_text(info.get("thumbnail")),
+            )
+        except (
+            json.JSONDecodeError,
+            OSError,
+            subprocess.CalledProcessError,
+            ValueError,
+        ) as error:
+            raise VideoLoaderError(
+                f"Failed to fetch metadata for {video_id}: {error}"
+            ) from error
 
 
 def _optional_text(value: Any) -> str | None:

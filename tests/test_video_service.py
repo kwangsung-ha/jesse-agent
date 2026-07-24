@@ -1,6 +1,5 @@
 """Unit tests for interface-independent video application services."""
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,12 @@ from tubetalk.domain.vision import (
     VisionIndexEntry,
     VisionManifest,
     VisionScene,
+)
+from tubetalk.pipeline.loader import (
+    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
+)
+from tubetalk.pipeline.loader import (
+    VideoLoaderError,
 )
 from tubetalk.ports.summary import SummaryProviderError
 from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
@@ -313,16 +318,16 @@ def test_process_raises_service_errors_for_invalid_url_and_ingestion(
 ) -> None:
     """Interfaces receive stable error types instead of loader exceptions."""
     service, loader, _, _, _ = _service(tmp_path, mocker)
-    loader.extract_video_id.side_effect = ValueError("Cannot extract video_id")
+    loader.extract_video_id.side_effect = LoaderInvalidVideoUrlError(
+        "Cannot extract video_id"
+    )
 
     with pytest.raises(InvalidVideoUrlError, match="Cannot extract video_id"):
         service.process("https://example.com/video")
 
     loader.extract_video_id.side_effect = None
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.side_effect = subprocess.CalledProcessError(
-        1, "yt-dlp", stderr="yt-dlp failed"
-    )
+    loader.fetch_metadata.side_effect = VideoLoaderError("yt-dlp failed")
     with pytest.raises(VideoIngestionError, match="Failed to process"):
         service.process("https://youtu.be/dQw4w9WgXcQ")
 

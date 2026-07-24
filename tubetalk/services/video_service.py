@@ -1,13 +1,9 @@
 """Application use cases for ingesting videos and reading their status."""
 
-import json
-import subprocess
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Callable, Optional
-
-from youtube_transcript_api._errors import YouTubeTranscriptApiException
 
 from tubetalk.core.cache import LocalCacheManager
 from tubetalk.domain.state import CacheState, SyncState
@@ -28,7 +24,13 @@ from tubetalk.domain.vision import (
     VisionScene,
     YouTubeUrlVisionSource,
 )
-from tubetalk.pipeline.loader import YouTubeLoader
+from tubetalk.pipeline.loader import (
+    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
+)
+from tubetalk.pipeline.loader import (
+    VideoLoaderError,
+    YouTubeLoader,
+)
 from tubetalk.ports.embedding import EmbeddingProvider, EmbeddingProviderError
 from tubetalk.ports.summary import SummaryProvider, SummaryProviderError
 from tubetalk.ports.transcript_index_repository import (
@@ -161,7 +163,7 @@ class VideoService:
         total_started = perf_counter()
         try:
             video_id = self._loader.extract_video_id(url)
-        except ValueError as error:
+        except LoaderInvalidVideoUrlError as error:
             raise InvalidVideoUrlError(str(error)) from error
 
         if self._cache.has_cache(video_id):
@@ -201,12 +203,7 @@ class VideoService:
         try:
             metadata = self._loader.fetch_metadata(video_id, url)
             transcript = self._loader.fetch_transcript(video_id)
-        except (
-            json.JSONDecodeError,
-            OSError,
-            subprocess.CalledProcessError,
-            YouTubeTranscriptApiException,
-        ) as error:
+        except VideoLoaderError as error:
             raise VideoIngestionError(
                 f"Failed to process {video_id}: {error}"
             ) from error
