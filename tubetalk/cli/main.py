@@ -10,6 +10,8 @@ from rich.table import Table
 from tubetalk.bootstrap import create_video_service
 from tubetalk.domain.summary import VideoSummary
 from tubetalk.services.video_service import (
+    ChatGenerationError,
+    ChatUnavailableError,
     InvalidVideoUrlError,
     ProcessResult,
     SummaryGenerationError,
@@ -111,6 +113,37 @@ def show_summary(
     if result.state == "generated":
         console.print("[green]Generated transcript summary.[/green]")
     _show_summary(result.summary)
+
+
+@app.command()
+def chat(video_id: Optional[str] = typer.Argument(default=None)) -> None:
+    """Ask grounded questions about a cached video in a multi-turn session."""
+    service = create_video_service()
+    if video_id is None:
+        video_id = _select_summary_video(service.list_statuses())
+    try:
+        session = service.create_chat_session(video_id)
+    except (VideoNotFoundError, ChatUnavailableError, ChatGenerationError) as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from error
+    console.print("[dim]Ask a question, or type 'exit' to finish.[/dim]")
+    while True:
+        try:
+            question = typer.prompt("You").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            return
+        if question.lower() in {"exit", "quit"}:
+            return
+        if not question:
+            continue
+        try:
+            answer = session.ask(question)
+        except (ChatUnavailableError, ChatGenerationError) as error:
+            console.print(f"[red]{error}[/red]")
+            continue
+        console.print(f"[bold cyan]TubeTalk[/bold cyan] {answer.answer}")
+        _show_chat_evidence(answer.citations, session.last_evidence)
 
 
 def _select_summary_video(videos: list[VideoStatus]) -> str:
@@ -238,6 +271,19 @@ def _format_timestamp(start_sec: float) -> str:
     if hours:
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     return f"{minutes:02d}:{seconds:02d}"
+
+
+def _show_chat_evidence(citations: tuple, evidence: tuple) -> None:
+    """Render only evidence records cited by a validated chat response."""
+    hits = {hit.source_id: hit for hit in evidence}
+    table = Table(title="Citations", show_header=True)
+    table.add_column("Timestamp", style="cyan", no_wrap=True)
+    table.add_column("Source", style="green")
+    table.add_column("Evidence")
+    for citation in citations:
+        hit = hits[citation.source_id]
+        table.add_row(_format_timestamp(citation.timestamp_sec), hit.source, hit.text)
+    console.print(table)
 
 
 def _show_all(videos: list[VideoStatus]) -> None:

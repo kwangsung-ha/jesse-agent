@@ -1,10 +1,12 @@
 """Repository port for a video's transcript vector index."""
 
 from abc import abstractmethod
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Protocol
 
+from pydantic import BaseModel, ConfigDict
+
+from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
 from tubetalk.ports.embedding import EmbeddingProvider
@@ -14,9 +16,10 @@ class TranscriptIndexRepositoryError(Exception):
     """Raised when a transcript-index backend cannot complete an operation."""
 
 
-@dataclass(frozen=True)
-class TranscriptIndexStatus:
+class TranscriptIndexStatus(BaseModel):
     """Repository-owned status data for a transcript index."""
+
+    model_config = ConfigDict(frozen=True)
 
     state: CacheState
     chunk_count: Optional[int] = None
@@ -46,3 +49,7 @@ class TranscriptIndexRepository(Protocol):
         embedding_provider: EmbeddingProvider,
     ) -> int:
         """Replace the index and return the stored chunk count."""
+
+    @abstractmethod
+    def search(self, query_embedding: list[float], limit: int) -> list[RetrievalHit]:
+        """Return the nearest transcript chunks for one embedded query."""

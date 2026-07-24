@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from tubetalk.core.cache import LocalCacheManager
+from tubetalk.domain.retrieval import ChatAnswer, Citation, RetrievalHit
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     Chapter,
@@ -31,8 +32,10 @@ from tubetalk.pipeline.loader import (
 from tubetalk.ports.summary import SummaryProviderError
 from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
 from tubetalk.ports.vision import VisionProviderError
+from tubetalk.ports.vision_index_repository import VisionVectorIndexStatus
 from tubetalk.services.stages import VisionIndexingStage
 from tubetalk.services.video_service import (
+    ChatUnavailableError,
     InvalidVideoUrlError,
     SummaryGenerationError,
     SummaryUnavailableError,
@@ -376,6 +379,73 @@ def test_process_does_not_hide_unexpected_indexing_errors(
 
     with pytest.raises(RuntimeError, match="unexpected bug"):
         service.process("https://youtu.be/dQw4w9WgXcQ")
+
+
+def test_chat_session_retrieves_evidence_and_keeps_turn_history(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """A session uses fresh retrieval and supplies prior turns to the provider."""
+    service, _, store, provider_factory, _ = _service(tmp_path, mocker)
+    cache = LocalCacheManager(data_dir=tmp_path)
+    _save_video(cache, "video123")
+    scene = VisionScene(0, 5, "A presenter appears.", ("presenter",))
+    cache.save_vision_index(
+        "video123",
+        VisionIndexEntry(
+            scenes=(scene,),
+            manifest=VisionManifest(
+                schema_version=VISION_SCHEMA_VERSION,
+                source_url="https://youtu.be/video123",
+                model="gemini-3.5-flash",
+                prompt_version="vision-scenes-v2-30s",
+                generated_at="2026-07-24T00:00:00+00:00",
+            ),
+        ),
+    )
+    vision_store = service._vision_index_repository_factory.return_value
+    store.get_index_status.return_value = TranscriptIndexStatus(state="current")
+    vision_store.get_index_status.return_value = VisionVectorIndexStatus(
+        state="current"
+    )
+    evidence = RetrievalHit(
+        source_id="video123:chunk:0",
+        source="transcript",
+        text="Hello",
+        start_sec=0,
+        end_sec=1,
+        rank=1,
+        distance=0.1,
+    )
+    store.search.return_value = [evidence]
+    vision_store.search.return_value = []
+    embedding = provider_factory.return_value
+    embedding.embed_query.return_value = [0.1]
+    chat_provider = mocker.Mock()
+    chat_provider.answer.return_value = ChatAnswer(
+        answer="Hello",
+        citations=(Citation(source_id="video123:chunk:0", timestamp_sec=0),),
+    )
+    service._chat_provider_factory = mocker.Mock(return_value=chat_provider)
+
+    session = service.create_chat_session("video123")
+    first = session.ask("What was said?")
+    session.ask("And then?")
+
+    assert first.answer == "Hello"
+    assert session.last_evidence[0].source_id == evidence.source_id
+    assert chat_provider.answer.call_args.args[2][0].question == "What was said?"
+
+
+def test_chat_session_requires_current_vision_scenes(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """Chat fails before provider construction when scene cache is unavailable."""
+    service, _, _, _, _ = _service(tmp_path, mocker)
+    cache = LocalCacheManager(data_dir=tmp_path)
+    _save_video(cache, "video123")
+
+    with pytest.raises(ChatUnavailableError, match="Vision scenes"):
+        service.create_chat_session("video123")
 
 
 def test_statuses_are_typed_and_missing_video_raises(

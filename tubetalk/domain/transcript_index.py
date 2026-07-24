@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -28,9 +27,10 @@ DEFAULT_TRANSCRIPT_CHUNK_POLICY = TranscriptChunkPolicy(
 )
 
 
-@dataclass(frozen=True)
-class TranscriptChunk:
+class TranscriptChunk(BaseModel):
     """A retrieval-sized, timestamped group of transcript segments."""
+
+    model_config = ConfigDict(frozen=True)
 
     index: int
     text: str
@@ -40,9 +40,10 @@ class TranscriptChunk:
     last_segment_index: int
 
 
-@dataclass(frozen=True)
-class IndexManifest:
+class IndexManifest(BaseModel):
     """Records the inputs and settings used to build a vector index."""
+
+    model_config = ConfigDict(frozen=True)
 
     schema_version: int
     transcript_sha256: str
@@ -52,12 +53,6 @@ class IndexManifest:
     chunk_count: int
     indexed_at: datetime
     collection_name: str = "transcript_collection"
-
-    def __post_init__(self) -> None:
-        if isinstance(self.indexed_at, str):
-            object.__setattr__(
-                self, "indexed_at", datetime.fromisoformat(self.indexed_at)
-            )
 
 
 def chunk_transcript(

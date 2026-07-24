@@ -3,8 +3,7 @@
 YouTube 영상의 자막과 시각적 장면을 로컬에 저장하고, Gemini와 ChromaDB로
 요약·타임스탬프 목차·검색용 인덱스를 만드는 Python CLI입니다.
 
-> 현재는 영상 처리, 캐시 상태 확인, 요약 조회까지 사용할 수 있습니다.
-> 자막과 비전 검색을 결합한 대화형 `chat` 명령은 아직 구현 예정입니다.
+> 영상 처리, 캐시 상태 확인, 요약 조회, 근거 인용을 포함한 대화형 Q&A를 사용할 수 있습니다.
 
 ## 주요 기능
 
@@ -87,6 +86,20 @@ poetry run tubetalk summary VIDEO_ID
 # 요약이 없거나 오래된 경우 새로 생성
 poetry run tubetalk summary VIDEO_ID --generate
 ```
+
+### 영상과 대화
+
+자막과 비전 인덱스가 모두 최신인 영상만 대화할 수 있습니다.
+
+```bash
+# 캐시된 영상 목록에서 선택
+poetry run tubetalk chat
+
+# 특정 영상과 바로 대화
+poetry run tubetalk chat VIDEO_ID
+```
+
+답변에는 검색된 자막 청크 또는 시각 장면 구간 안에서 검증된 타임스탬프 인용이 표시됩니다.
 
 전체 명령 목록은 다음으로 확인할 수 있습니다.
 

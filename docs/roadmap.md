@@ -35,12 +35,12 @@
   - ChromaDB `vision_collection` Vector 인덱싱
 
 ## Phase 3: Hybrid Retrieval & Interactive CLI Agent
-- [ ] **Task 06: Hybrid Dual Retriever & RRF Fusion Engine (`agent/retriever.py`)**
+- [x] **Task 06: Hybrid Dual Retriever & RRF Fusion Engine (`agent/retriever.py`)** `docs/tasks/06-hybrid-retrieval-chat.md`
   - 텍스트 자막 + 비전 씬 디스크립터 검색결과 Reciprocal Rank Fusion
   - Timestamp Citation 검증 후처리
 
-- [i] **Task 07: Typer & Rich CLI 인터페이스 완성 (`cli/`)**
+- [x] **Task 07: Typer & Rich CLI 인터페이스 완성 (`cli/`)**
   - [x] `tubetalk process <url>`
   - [x] `tubetalk status [video_id]`
   - [x] `tubetalk summary [video_id]` 및 `--generate`
-  - [ ] `tubetalk chat <video_id>` (멀티턴 대화형 Q&A)
+  - [x] `tubetalk chat [video_id]` (멀티턴 대화형 Q&A, ID 생략 시 목록 선택)

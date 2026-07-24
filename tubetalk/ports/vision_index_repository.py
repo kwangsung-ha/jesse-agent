@@ -1,10 +1,12 @@
 """Repository port for a video's visual-scene vector index."""
 
 from abc import abstractmethod
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Protocol
 
+from pydantic import BaseModel, ConfigDict
+
+from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
 from tubetalk.ports.embedding import EmbeddingProvider
@@ -14,9 +16,10 @@ class VisionIndexRepositoryError(Exception):
     """Raised when a vision-index backend cannot complete an operation."""
 
 
-@dataclass(frozen=True)
-class VisionVectorIndexStatus:
+class VisionVectorIndexStatus(BaseModel):
     """Repository-owned status data for a visual-scene vector index."""
+
+    model_config = ConfigDict(frozen=True)
 
     state: CacheState
     scene_count: Optional[int] = None
@@ -46,3 +49,7 @@ class VisionIndexRepository(Protocol):
         embedding_provider: EmbeddingProvider,
     ) -> int:
         """Replace the index and return the stored scene count."""
+
+    @abstractmethod
+    def search(self, query_embedding: list[float], limit: int) -> list[RetrievalHit]:
+        """Return the nearest visual scenes for one embedded query."""

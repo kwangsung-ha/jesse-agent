@@ -1,11 +1,11 @@
 """CLI adapter tests using a mocked application service."""
 
-from dataclasses import replace
 from typing import Any
 
 from typer.testing import CliRunner
 
 from tubetalk.cli.main import _format_vision_state, _format_vision_summary, app
+from tubetalk.domain.retrieval import ChatAnswer, Citation, RetrievalHit
 from tubetalk.domain.summary import Chapter, VideoSummary
 from tubetalk.services.results import IndexingResult
 from tubetalk.services.video_service import (
@@ -108,9 +108,11 @@ def test_status_not_found_maps_service_error_to_exit_code(mocker: Any) -> None:
 def test_vision_status_formatters_show_freshness_and_scene_count() -> None:
     """Vision freshness should have concise list and detailed renderings."""
     missing = _status()
-    current = replace(missing, vision_index_state="current", vision_scene_count=4)
-    stale = replace(missing, vision_index_state="stale")
-    invalid = replace(missing, vision_index_state="invalid")
+    current = missing.model_copy(
+        update={"vision_index_state": "current", "vision_scene_count": 4}
+    )
+    stale = missing.model_copy(update={"vision_index_state": "stale"})
+    invalid = missing.model_copy(update={"vision_index_state": "invalid"})
 
     assert _format_vision_summary(missing) == "—"
     assert _format_vision_summary(current) == "✅ 4"
@@ -120,6 +122,38 @@ def test_vision_status_formatters_show_freshness_and_scene_count() -> None:
     assert _format_vision_state(stale) == "⚠️ Stale"
     assert _format_vision_state(invalid) == "❌ Invalid"
     assert _format_vision_state(missing) == "❌ Missing"
+
+
+def test_chat_without_video_id_selects_cached_video_and_renders_citations(
+    mocker: Any,
+) -> None:
+    """Chat shares summary's selector when no ID is supplied."""
+    service = _mock_service(mocker)
+    session = mocker.Mock()
+    session.ask.return_value = ChatAnswer(
+        answer="발표자가 소개합니다.",
+        citations=(Citation(source_id="vid:chunk:0", timestamp_sec=3),),
+    )
+    session.last_evidence = (
+        RetrievalHit(
+            source_id="vid:chunk:0",
+            source="transcript",
+            text="소개 내용",
+            start_sec=0,
+            end_sec=5,
+            rank=1,
+            distance=0.1,
+        ),
+    )
+    service.list_statuses.return_value = [_status("vid")]
+    service.create_chat_session.return_value = session
+
+    result = runner.invoke(app, ["chat"], input="1\n무슨 내용이야?\nexit\n")
+
+    assert result.exit_code == 0
+    service.create_chat_session.assert_called_once_with("vid")
+    assert "발표자가 소개합니다" in result.output
+    assert "Citations" in result.output
 
 
 def test_process_renders_cache_miss_and_index_result(mocker: Any) -> None:

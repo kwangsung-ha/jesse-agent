@@ -1,6 +1,5 @@
 """Typed local-video status shared by cache and application services."""
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -50,9 +49,10 @@ class VideoStatusDetails(BaseModel):
     vision_vector_index: VectorIndexStatus
 
 
-@dataclass(frozen=True)
-class VideoStatus:
+class VideoStatus(BaseModel):
     """UI-independent status for one locally known video."""
+
+    model_config = ConfigDict(frozen=True)
 
     video_id: str
     title: Optional[str]
@@ -120,11 +120,3 @@ class VideoStatus:
                 indexed_at=self.vision_vector_indexed_at,
             ),
         )
-
-    model_config = ConfigDict(frozen=True)
-
-    model_config = ConfigDict(frozen=True)
-
-    model_config = ConfigDict(frozen=True)
-
-    model_config = ConfigDict(frozen=True)

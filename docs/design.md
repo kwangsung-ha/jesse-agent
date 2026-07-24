@@ -3,8 +3,8 @@
 ## 1. 시스템 개요
 
 TubeTalk는 YouTube 영상의 자막과 Gemini가 생성한 시각 장면 설명을 영상별 로컬
-캐시와 ChromaDB에 저장하는 CLI 애플리케이션이다. 현재는 수집·인덱싱·자막 요약과
-상태 조회를 제공하며, 하이브리드 검색과 대화형 Q&A는 아직 연결하지 않았다.
+캐시와 ChromaDB에 저장하는 CLI 애플리케이션이다. 수집·인덱싱·자막 요약·상태 조회와
+하이브리드 검색 기반 대화형 Q&A를 제공한다.
 
 ```mermaid
 graph TD
@@ -115,8 +115,9 @@ Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 �
 | `tubetalk status [video_id]` | 전체 캐시 목록 또는 특정 영상의 캐시·인덱스 상세 상태 표시 |
 | `tubetalk summary [video_id]` | 현재 요약을 표시. ID 생략 시 캐시 영상 선택 |
 | `tubetalk summary <video_id> --generate` | 요약이 없거나 stale이면 생성 |
+| `tubetalk chat [video_id]` | 자막·비전 근거를 융합해 멀티턴 Q&A. ID 생략 시 캐시 영상 선택 |
 
-`tubetalk chat <video_id>`와 벡터 검색 UI는 아직 제공하지 않는다.
+`chat`은 자막·비전 인덱스가 모두 최신일 때만 시작하며, 세션 기록은 디스크에 저장하지 않는다.
 
 ## 6. 설정과 로컬 저장소
 
@@ -137,7 +138,4 @@ data/{video_id}/
 
 ## 7. 후속 설계 범위
 
-- `GeminiEmbeddingProvider.embed_query()`를 사용하는 자막·비전 dual retrieval
-- RRF 결과 융합과 타임스탬프 인용 검증
-- 대화 기록을 보존하는 CLI `chat` 세션
 - 필요 시 vision provider 경계 뒤에 로컬 프레임 추출 또는 이미지 임베딩 구현

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     vision_model: str = "gemini-3.5-flash"
     vision_prompt_version: str = "vision-scenes-v2-30s"
-    llm_model: str = "gemini-2.5-pro"
+    llm_model: str = "gemini-3.5-flash-lite"
     summary_model: str = "gemini-3.5-flash-lite"
     summary_language: str = "ko"
     summary_prompt_version: str = "summary-chapters-v1"

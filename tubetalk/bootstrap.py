@@ -5,6 +5,7 @@ from collections.abc import Callable
 from tubetalk.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from tubetalk.core.config import Settings, settings
 from tubetalk.domain.transcript_index import TranscriptChunkPolicy
+from tubetalk.infrastructure.chats.gemini import GeminiChatProvider
 from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
 from tubetalk.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
@@ -15,6 +16,7 @@ from tubetalk.infrastructure.repositories.chroma_vision import (
 from tubetalk.infrastructure.summaries.gemini import GeminiSummaryProvider
 from tubetalk.infrastructure.visions.gemini import GeminiVisionAnalyzer
 from tubetalk.pipeline.loader import YouTubeLoader
+from tubetalk.ports.chat import ChatProvider
 from tubetalk.ports.embedding import EmbeddingProvider
 from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import TranscriptIndexRepository
@@ -44,6 +46,7 @@ def create_video_service(config: Settings = settings) -> VideoService:
         summary_provider_factory=_summary_provider_factory(config),
         vision_analyzer_factory=_vision_analyzer_factory(config),
         vision_index_repository_factory=_vision_repository_factory(config),
+        chat_provider_factory=_chat_provider_factory(config),
         summary_model=config.summary_model,
         summary_prompt_version=config.summary_prompt_version,
         summary_language=config.summary_language,
@@ -106,4 +109,11 @@ def _vision_repository_factory(
         data_dir=config.data_dir,
         embedding_model=config.embedding_model,
         embedding_dimension=config.embedding_dimension,
+    )
+
+
+def _chat_provider_factory(config: Settings) -> Callable[[], ChatProvider]:
+    """Build the configured grounded-answer provider lazily."""
+    return lambda: GeminiChatProvider(
+        api_key=config.gemini_api_key, model=config.llm_model
     )

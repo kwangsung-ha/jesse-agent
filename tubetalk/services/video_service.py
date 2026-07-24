@@ -1,14 +1,16 @@
 """Application use cases for ingesting videos and reading their status."""
 
-from dataclasses import replace
 from time import perf_counter
 from typing import Callable, Optional
 
+from tubetalk.agent.retriever import HybridRetrievalError, HybridRetriever
 from tubetalk.core.cache import LocalCacheManager
+from tubetalk.domain.retrieval import ChatAnswer, ChatTurn, RetrievalHit
 from tubetalk.domain.state import CacheState, SyncState
 from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.video import CachedVideo
 from tubetalk.domain.video_status import VideoStatus
+from tubetalk.domain.vision import VisionScene
 from tubetalk.pipeline.loader import (
     InvalidVideoUrlError as LoaderInvalidVideoUrlError,
 )
@@ -16,6 +18,7 @@ from tubetalk.pipeline.loader import (
     VideoLoaderError,
     YouTubeLoader,
 )
+from tubetalk.ports.chat import ChatProvider, ChatProviderError
 from tubetalk.ports.embedding import EmbeddingProvider
 from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import (
@@ -64,6 +67,53 @@ class SummaryGenerationError(VideoServiceError):
     """Raised when an explicitly requested summary cannot be generated."""
 
 
+class ChatUnavailableError(VideoServiceError):
+    """Raised when a video cannot provide current dual-index evidence."""
+
+
+class ChatGenerationError(VideoServiceError):
+    """Raised when an answer provider cannot return valid grounded output."""
+
+
+class ChatSession:
+    """An in-memory, video-scoped conversational session."""
+
+    def __init__(
+        self,
+        retriever: HybridRetriever,
+        provider: ChatProvider,
+        cached_video: CachedVideo,
+        scenes: tuple[VisionScene, ...],
+    ) -> None:
+        self._retriever = retriever
+        self._provider = provider
+        self._cached_video = cached_video
+        self._scenes = scenes
+        self._history: list[ChatTurn] = []
+        self._last_evidence = ()
+
+    @property
+    def last_evidence(self) -> tuple[RetrievalHit, ...]:
+        """Return the evidence used for the most recent successful response."""
+        return self._last_evidence
+
+    def ask(self, question: str) -> ChatAnswer:
+        """Retrieve fresh evidence and append one validated answer to this session."""
+        try:
+            evidence = self._retriever.retrieve(
+                question, self._cached_video.transcript, self._scenes
+            )
+        except HybridRetrievalError as error:
+            raise ChatUnavailableError(str(error)) from error
+        try:
+            answer = self._provider.answer(question, evidence, tuple(self._history))
+        except ChatProviderError as error:
+            raise ChatGenerationError(str(error)) from error
+        self._last_evidence = evidence
+        self._history.append(ChatTurn(question=question, answer=answer))
+        return answer
+
+
 class VideoService:
     """Coordinate cache, YouTube loading, and transcript indexing use cases."""
 
@@ -81,6 +131,7 @@ class VideoService:
         summary_language: str,
         vision_model: str,
         vision_prompt_version: str,
+        chat_provider_factory: Callable[[], ChatProvider] | None = None,
     ) -> None:
         """Create a service with explicit infrastructure dependencies."""
         self._cache = cache
@@ -90,6 +141,7 @@ class VideoService:
         self._summary_provider_factory = summary_provider_factory
         self._vision_analyzer_factory = vision_analyzer_factory
         self._vision_index_repository_factory = vision_index_repository_factory
+        self._chat_provider_factory = chat_provider_factory
         self._summary_model = summary_model
         self._summary_prompt_version = summary_prompt_version
         self._summary_language = summary_language
@@ -196,6 +248,38 @@ class VideoService:
             raise SummaryGenerationError(result.warning or "Failed to generate summary")
         return result
 
+    def create_chat_session(self, video_id: str) -> ChatSession:
+        """Create one non-persistent session after verifying cached source data."""
+        if not self._cache.has_cache(video_id):
+            raise VideoNotFoundError(f"Video '{video_id}' not found in local cache.")
+        cached_video = self._load_cached_resources(video_id)
+        vision_status = self._cache.get_vision_index_status(
+            video_id,
+            source_url=cached_video.metadata.source_url,
+            model=self._vision_model,
+            prompt_version=self._vision_prompt_version,
+        )
+        if vision_status.entry is None:
+            raise ChatUnavailableError(
+                "Vision scenes are unavailable or stale. "
+                "Run 'tubetalk process <url>' first."
+            )
+        return ChatSession(
+            HybridRetriever(
+                self._embedding_provider_factory(),
+                self._transcript_index_repository_factory(video_id),
+                self._vision_index_repository_factory(video_id),
+            ),
+            self._get_chat_provider(),
+            cached_video,
+            vision_status.entry.scenes,
+        )
+
+    def _get_chat_provider(self) -> ChatProvider:
+        if self._chat_provider_factory is None:
+            raise ChatGenerationError("Chat provider is not configured")
+        return self._chat_provider_factory()
+
     def _video_status(self, status: VideoStatus) -> VideoStatus:
         video_id = status.video_id
         transcript: Optional[Transcript] = None
@@ -210,18 +294,21 @@ class VideoService:
         except (OSError, TranscriptIndexRepositoryError):
             index_status = TranscriptIndexStatus(state=CacheState.INVALID)
         vision_vector_status = self._vision_stage.get_vector_status(video_id)
-        return replace(
-            status,
-            transcript_index_state=index_status.state,
-            transcript_index_chunks=index_status.chunk_count,
-            transcript_index_model=index_status.embedding_model,
-            transcript_index_dimension=index_status.embedding_dimension,
-            transcript_indexed_at=index_status.indexed_at,
-            vision_vector_index_state=vision_vector_status.state,
-            vision_vector_index_scenes=vision_vector_status.scene_count,
-            vision_vector_index_model=vision_vector_status.embedding_model,
-            vision_vector_index_dimension=vision_vector_status.embedding_dimension,
-            vision_vector_indexed_at=vision_vector_status.indexed_at,
+        return status.model_copy(
+            update={
+                "transcript_index_state": index_status.state,
+                "transcript_index_chunks": index_status.chunk_count,
+                "transcript_index_model": index_status.embedding_model,
+                "transcript_index_dimension": index_status.embedding_dimension,
+                "transcript_indexed_at": index_status.indexed_at,
+                "vision_vector_index_state": vision_vector_status.state,
+                "vision_vector_index_scenes": vision_vector_status.scene_count,
+                "vision_vector_index_model": vision_vector_status.embedding_model,
+                "vision_vector_index_dimension": (
+                    vision_vector_status.embedding_dimension
+                ),
+                "vision_vector_indexed_at": vision_vector_status.indexed_at,
+            }
         )
 
     def _load_cached_resources(self, video_id: str) -> CachedVideo:

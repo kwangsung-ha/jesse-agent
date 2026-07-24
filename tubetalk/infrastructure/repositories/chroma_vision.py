@@ -2,13 +2,14 @@
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from chromadb.errors import ChromaError
+from pydantic import BaseModel, ConfigDict
 
+from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
 from tubetalk.infrastructure.repositories.chroma_base import ChromaVectorRepositoryBase
@@ -21,9 +22,10 @@ from tubetalk.ports.vision_index_repository import (
 VISION_VECTOR_SCHEMA_VERSION = 1
 
 
-@dataclass(frozen=True)
-class VisionVectorManifest:
+class VisionVectorManifest(BaseModel):
     """Records the source scenes and settings of a vision vector index."""
+
+    model_config = ConfigDict(frozen=True)
 
     schema_version: int
     scenes_sha256: str
@@ -149,6 +151,40 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
         self._retire_collection(previous_collection)
         return len(scenes)
 
+    def search(self, query_embedding: list[float], limit: int) -> list[RetrievalHit]:
+        """Search the active visual-scene generation with an explicit vector."""
+        if limit < 1:
+            raise ValueError("Search limit must be positive")
+        if len(query_embedding) != self.embedding_dimension:
+            raise ValueError("Query embedding has an unexpected dimension")
+        try:
+            self._collection_for_manifest(self._load_manifest_data())
+            result = self._collection.query(
+                query_embeddings=[query_embedding],
+                n_results=limit,
+                include=["documents", "metadatas", "distances"],
+            )
+            ids = result["ids"][0]
+            documents = result["documents"][0]
+            metadatas = result["metadatas"][0]
+            distances = result["distances"][0]
+            return [
+                RetrievalHit(
+                    source_id=str(item_id),
+                    source="vision",
+                    text=str(document),
+                    start_sec=float(metadata["start_sec"]),
+                    end_sec=float(metadata["end_sec"]),
+                    rank=rank,
+                    distance=float(distance),
+                )
+                for rank, (item_id, document, metadata, distance) in enumerate(
+                    zip(ids, documents, metadatas, distances), start=1
+                )
+            ]
+        except (ChromaError, OSError, KeyError, TypeError, ValueError) as error:
+            raise VisionIndexRepositoryError(str(error)) from error
+
     def _save_manifest(
         self, scenes: tuple[VisionScene, ...], collection_name: str
     ) -> None:
@@ -161,9 +197,7 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
             indexed_at=datetime.now(timezone.utc),
             collection_name=collection_name,
         )
-        payload = asdict(manifest)
-        payload["indexed_at"] = manifest.indexed_at.isoformat()
-        self._save_manifest_data(payload)
+        self._save_manifest_data(manifest.model_dump(mode="json"))
 
 
 def format_scene_document(scene: VisionScene, title: str) -> str:
@@ -180,7 +214,7 @@ def format_scene_document(scene: VisionScene, title: str) -> str:
 def scenes_sha256(scenes: tuple[VisionScene, ...]) -> str:
     """Return a stable digest of the scene content used for embedding."""
     serialized = json.dumps(
-        [asdict(scene) for scene in scenes],
+        [scene.model_dump(mode="json") for scene in scenes],
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),

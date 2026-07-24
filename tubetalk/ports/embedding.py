@@ -15,3 +15,6 @@ class EmbeddingProvider(Protocol):
 
     def embed_documents(self, documents: list[str]) -> list[list[float]]:
         """Return one vector for each document."""
+
+    def embed_query(self, query: str) -> list[float]:
+        """Return one vector in the same space as indexed documents."""

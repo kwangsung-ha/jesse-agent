@@ -1,13 +1,13 @@
 """ChromaDB implementation of the transcript-index repository port."""
 
 import json
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from chromadb.errors import ChromaError
 
+from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import (
@@ -155,6 +155,40 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
         self._retire_collection(previous_collection)
         return len(chunks)
 
+    def search(self, query_embedding: list[float], limit: int) -> list[RetrievalHit]:
+        """Search the active transcript generation with an explicit vector."""
+        if limit < 1:
+            raise ValueError("Search limit must be positive")
+        if len(query_embedding) != self.embedding_dimension:
+            raise ValueError("Query embedding has an unexpected dimension")
+        try:
+            self._collection_for_manifest(self._load_manifest_data())
+            result = self._collection.query(
+                query_embeddings=[query_embedding],
+                n_results=limit,
+                include=["documents", "metadatas", "distances"],
+            )
+            ids = result["ids"][0]
+            documents = result["documents"][0]
+            metadatas = result["metadatas"][0]
+            distances = result["distances"][0]
+            return [
+                RetrievalHit(
+                    source_id=str(item_id),
+                    source="transcript",
+                    text=str(document),
+                    start_sec=float(metadata["start_sec"]),
+                    end_sec=float(metadata["end_sec"]),
+                    rank=rank,
+                    distance=float(distance),
+                )
+                for rank, (item_id, document, metadata, distance) in enumerate(
+                    zip(ids, documents, metadatas, distances), start=1
+                )
+            ]
+        except (ChromaError, OSError, KeyError, TypeError, ValueError) as error:
+            raise TranscriptIndexRepositoryError(str(error)) from error
+
     def _save_manifest(
         self, transcript: Transcript, chunk_count: int, collection_name: str
     ) -> None:
@@ -168,6 +202,4 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
             indexed_at=datetime.now(timezone.utc),
             collection_name=collection_name,
         )
-        payload = asdict(manifest)
-        payload["indexed_at"] = manifest.indexed_at.isoformat()
-        self._save_manifest_data(payload)
+        self._save_manifest_data(manifest.model_dump(mode="json"))
