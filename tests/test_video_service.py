@@ -31,6 +31,7 @@ from tubetalk.pipeline.loader import (
 from tubetalk.ports.summary import SummaryProviderError
 from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
 from tubetalk.ports.vision import VisionProviderError
+from tubetalk.services.stages import VisionIndexingStage
 from tubetalk.services.video_service import (
     InvalidVideoUrlError,
     SummaryGenerationError,
@@ -167,6 +168,37 @@ def test_process_reuses_current_vision_index_without_provider_call(
 
     assert result.vision.state == "current"
     service._vision_analyzer_factory.assert_not_called()
+
+
+def test_vision_stage_owns_scene_and_vector_index_synchronisation(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """The vision collaborator can be exercised without the service facade."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    analyzer = mocker.Mock()
+    analyzer.describe.return_value = (
+        VisionScene(0, 5, "A presenter appears.", ("presenter",)),
+    )
+    repository = mocker.Mock()
+    repository.needs_indexing.return_value = True
+    repository.index_scenes.return_value = 1
+    provider_factory = mocker.Mock(return_value=mocker.Mock())
+    stage = VisionIndexingStage(
+        cache,
+        mocker.Mock(return_value=analyzer),
+        mocker.Mock(return_value=repository),
+        provider_factory,
+        model="gemini-3.5-flash",
+        prompt_version="vision-scenes-v2-30s",
+    )
+
+    result = stage.sync("video123", _metadata("video123"))
+
+    assert result.state == "generated"
+    assert result.scene_count == 1
+    assert result.indexing.state == "indexed"
+    analyzer.describe.assert_called_once()
+    repository.index_scenes.assert_called_once()
 
 
 def test_process_keeps_text_cache_when_vision_generation_fails(

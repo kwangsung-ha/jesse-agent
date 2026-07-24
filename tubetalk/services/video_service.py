@@ -1,28 +1,14 @@
 """Application use cases for ingesting videos and reading their status."""
 
 from dataclasses import replace
-from datetime import datetime, timezone
 from time import perf_counter
 from typing import Callable, Optional
 
 from tubetalk.core.cache import LocalCacheManager
 from tubetalk.domain.state import CacheState, SyncState
-from tubetalk.domain.summary import (
-    SUMMARY_SCHEMA_VERSION,
-    SummaryCacheEntry,
-    SummaryManifest,
-)
 from tubetalk.domain.transcript import Transcript
-from tubetalk.domain.transcript_index import transcript_sha256
-from tubetalk.domain.video import CachedVideo, VideoMetadata
+from tubetalk.domain.video import CachedVideo
 from tubetalk.domain.video_status import VideoStatus
-from tubetalk.domain.vision import (
-    VISION_SCHEMA_VERSION,
-    VisionIndexEntry,
-    VisionManifest,
-    VisionScene,
-    YouTubeUrlVisionSource,
-)
 from tubetalk.pipeline.loader import (
     InvalidVideoUrlError as LoaderInvalidVideoUrlError,
 )
@@ -30,30 +16,27 @@ from tubetalk.pipeline.loader import (
     VideoLoaderError,
     YouTubeLoader,
 )
-from tubetalk.ports.embedding import EmbeddingProvider, EmbeddingProviderError
-from tubetalk.ports.summary import SummaryProvider, SummaryProviderError
+from tubetalk.ports.embedding import EmbeddingProvider
+from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import (
     TranscriptIndexRepository,
     TranscriptIndexRepositoryError,
     TranscriptIndexStatus,
 )
-from tubetalk.ports.vision import VisionAnalyzer, VisionProviderError
+from tubetalk.ports.vision import VisionAnalyzer
 from tubetalk.ports.vision_index_repository import (
     VisionIndexRepository,
-    VisionIndexRepositoryError,
-    VisionVectorIndexStatus,
 )
 from tubetalk.services.results import (
-    IndexingResult,
     ProcessResult,
     ProcessTiming,
     SummaryResult,
-    VisionResult,
 )
 from tubetalk.services.stages import (
     SummaryGenerationStage,
     TranscriptIndexingStage,
     VideoIngestionStage,
+    VisionIndexingStage,
 )
 
 
@@ -123,6 +106,14 @@ class VideoService:
             summary_prompt_version,
             summary_language,
         )
+        self._vision_stage = VisionIndexingStage(
+            cache,
+            vision_analyzer_factory,
+            vision_index_repository_factory,
+            embedding_provider_factory,
+            vision_model,
+            vision_prompt_version,
+        )
 
     def process(self, url: str) -> ProcessResult:
         """Fetch or reuse a video cache, then bring its index up to date."""
@@ -148,7 +139,7 @@ class VideoService:
         )
         summary_sec = perf_counter() - summary_started
         vision_started = perf_counter()
-        vision = self._sync_vision_index(video_id, cached_video.metadata)
+        vision = self._vision_stage.sync(video_id, cached_video.metadata)
         vision_sec = perf_counter() - vision_started
         return ProcessResult(
             video_id=video_id,
@@ -198,7 +189,7 @@ class VideoService:
                 f"Summary for '{video_id}' is {status.state}. "
                 f"Run 'tubetalk summary {video_id} --generate' to create it."
             )
-        result = self._sync_summary(
+        result = self._summary_stage.sync(
             video_id, cached_video.metadata, cached_video.transcript
         )
         if result.state == "warning":
@@ -218,7 +209,7 @@ class VideoService:
             index_status = repository.get_index_status(transcript)
         except (OSError, TranscriptIndexRepositoryError):
             index_status = TranscriptIndexStatus(state=CacheState.INVALID)
-        vision_vector_status = self._vision_vector_status(video_id)
+        vision_vector_status = self._vision_stage.get_vector_status(video_id)
         return replace(
             status,
             transcript_index_state=index_status.state,
@@ -238,166 +229,3 @@ class VideoService:
             return self._cache.load_video(video_id)
         except (OSError, ValueError) as error:
             raise VideoIngestionError("Cached video has an invalid format") from error
-
-    def _sync_transcript_index(
-        self,
-        video_id: str,
-        metadata: VideoMetadata,
-        transcript: Transcript,
-    ) -> IndexingResult:
-        try:
-            repository = self._transcript_index_repository_factory(video_id)
-            if not repository.needs_indexing(transcript):
-                return IndexingResult(state=SyncState.CURRENT)
-
-            provider = self._embedding_provider_factory()
-            chunk_count = repository.index_transcript(
-                transcript, self._video_title(metadata), provider
-            )
-            return IndexingResult(state=SyncState.INDEXED, chunk_count=chunk_count)
-        except (
-            EmbeddingProviderError,
-            OSError,
-            TranscriptIndexRepositoryError,
-            ValueError,
-        ) as error:
-            return IndexingResult(state=SyncState.WARNING, warning=str(error))
-
-    def _sync_summary(
-        self,
-        video_id: str,
-        metadata: VideoMetadata,
-        transcript: Transcript,
-    ) -> SummaryResult:
-        """Reuse or regenerate the summary without discarding cached resources."""
-        try:
-            status = self._cache.get_summary_status(
-                video_id,
-                transcript,
-                model=self._summary_model,
-                prompt_version=self._summary_prompt_version,
-                language=self._summary_language,
-            )
-            if status.state == CacheState.CURRENT and status.entry is not None:
-                return SummaryResult(
-                    state=SyncState.CURRENT, summary=status.entry.summary
-                )
-
-            provider = self._summary_provider_factory()
-            summary = provider.generate_summary(
-                transcript,
-                title=self._video_title(metadata),
-                language=self._summary_language,
-            )
-            self._cache.save_summary(
-                video_id,
-                SummaryCacheEntry(
-                    summary=summary,
-                    manifest=SummaryManifest(
-                        schema_version=SUMMARY_SCHEMA_VERSION,
-                        transcript_sha256=transcript_sha256(transcript),
-                        model=self._summary_model,
-                        prompt_version=self._summary_prompt_version,
-                        language=self._summary_language,
-                        generated_at=datetime.now(timezone.utc),
-                    ),
-                ),
-            )
-            return SummaryResult(state=SyncState.GENERATED, summary=summary)
-        except (OSError, SummaryProviderError, ValueError) as error:
-            return SummaryResult(state=SyncState.WARNING, warning=str(error))
-
-    def _sync_vision_index(
-        self, video_id: str, metadata: VideoMetadata
-    ) -> VisionResult:
-        """Reuse or generate visual scenes without affecting text-cache success."""
-        source_url = metadata.source_url
-        duration = metadata.duration_sec
-        if duration is None:
-            return VisionResult(
-                state=SyncState.WARNING,
-                warning="Cached metadata does not contain a valid duration",
-            )
-        try:
-            status = self._cache.get_vision_index_status(
-                video_id,
-                source_url=source_url,
-                model=self._vision_model,
-                prompt_version=self._vision_prompt_version,
-            )
-            if status.state == CacheState.CURRENT and status.entry is not None:
-                return VisionResult(
-                    state=SyncState.CURRENT,
-                    scene_count=len(status.entry.scenes),
-                    indexing=self._sync_vision_vectors(
-                        video_id, metadata, status.entry.scenes
-                    ),
-                )
-            analyzer = self._vision_analyzer_factory()
-            scenes = analyzer.describe(
-                YouTubeUrlVisionSource(source_url),
-                title=self._video_title(metadata),
-                duration_sec=float(duration),
-            )
-            self._cache.save_vision_index(
-                video_id,
-                VisionIndexEntry(
-                    scenes=scenes,
-                    manifest=VisionManifest(
-                        schema_version=VISION_SCHEMA_VERSION,
-                        source_url=source_url,
-                        model=self._vision_model,
-                        prompt_version=self._vision_prompt_version,
-                        generated_at=datetime.now(timezone.utc),
-                    ),
-                ),
-            )
-            return VisionResult(
-                state=SyncState.GENERATED,
-                scene_count=len(scenes),
-                indexing=self._sync_vision_vectors(video_id, metadata, scenes),
-            )
-        except (OSError, ValueError, VisionProviderError) as error:
-            return VisionResult(state=SyncState.WARNING, warning=str(error))
-
-    def _sync_vision_vectors(
-        self, video_id: str, metadata: VideoMetadata, scenes: tuple[VisionScene, ...]
-    ) -> IndexingResult:
-        """Index visual scene descriptions without failing the scene cache."""
-        try:
-            repository = self._vision_index_repository_factory(video_id)
-            if not repository.needs_indexing(scenes):
-                return IndexingResult(state=SyncState.CURRENT)
-            provider = self._embedding_provider_factory()
-            count = repository.index_scenes(
-                scenes, self._video_title(metadata), provider
-            )
-            return IndexingResult(state=SyncState.INDEXED, chunk_count=count)
-        except (
-            EmbeddingProviderError,
-            OSError,
-            ValueError,
-            VisionIndexRepositoryError,
-        ) as error:
-            return IndexingResult(state=SyncState.WARNING, warning=str(error))
-
-    def _vision_vector_status(self, video_id: str) -> VisionVectorIndexStatus:
-        """Read the scene-vector manifest without invoking an embedding provider."""
-        try:
-            source_url = self._cache.load_video(video_id).metadata.source_url
-            vision_entry = self._cache.get_vision_index_status(
-                video_id,
-                source_url=source_url,
-                model=self._vision_model,
-                prompt_version=self._vision_prompt_version,
-            ).entry
-            return self._vision_index_repository_factory(video_id).get_index_status(
-                vision_entry.scenes if vision_entry else None
-            )
-        except (OSError, ValueError, VisionIndexRepositoryError):
-            return VisionVectorIndexStatus(state=CacheState.INVALID)
-
-    @staticmethod
-    def _video_title(metadata: VideoMetadata) -> str:
-        """Choose a useful fallback title for provider prompts."""
-        return metadata.title or f"YouTube video {metadata.video_id}"
