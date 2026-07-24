@@ -1,196 +1,143 @@
-# System Design Specification: TubeTalk (YouTube Video Intelligence Agent)
+# System Design Specification: TubeTalk
 
-## 1. 시스템 개요 (System Overview)
+## 1. 시스템 개요
 
-TubeTalk는 유튜브 영상의 텍스트 자막(Transcript)과 비전(Vision) 키프레임 인덱싱 데이터를 결합하여, 하이브리드 RAG 파이프라인을 구동하는 터미널 기반 CLI AI Agent입니다. 
-
-### 1.1 하이레벨 아키텍처 (High-Level Architecture)
+TubeTalk는 YouTube 영상의 자막과 Gemini가 생성한 시각 장면 설명을 영상별 로컬
+캐시와 ChromaDB에 저장하는 CLI 애플리케이션이다. 현재는 수집·인덱싱·자막 요약과
+상태 조회를 제공하며, 하이브리드 검색과 대화형 Q&A는 아직 연결하지 않았다.
 
 ```mermaid
 graph TD
-    User([User CLI / Terminal]) --> CLI[CLI Module - Typer & Rich]
-    CLI --> Core[Orchestrator / Core Pipeline]
-    
-    subgraph Ingestion & Processing Pipeline
-        Core --> Loader[YouTube Loader - yt-dlp & Transcript API]
-        Core --> Sampler[Keyframe Sampler - OpenCV]
-        Core --> VisionIndexer[Vision Indexer - Gemini Vision API]
-    end
-
-    subgraph Storage Layer
-        Core --> CacheMgr[Local Cache Manager - ./data/{video_id}/]
-        CacheMgr --> FileStore[JSON Files - transcript, vision_index, metadata]
-        CacheMgr --> VectorStore[ChromaDB - Text & Vision Embeddings]
-    end
-
-    subgraph Agent & RAG Engine
-        CLI --> Agent[Interactive Q&A Agent]
-        Agent --> HybridRetriever[Hybrid Retriever - Transcript + Vision]
-        HybridRetriever --> VectorStore
-        Agent --> LLM[Multimodal LLM Engine - Gemini 2.5 Pro]
-    end
+    User[User] --> CLI[Typer CLI]
+    CLI --> Service[VideoService]
+    Service --> Cache[LocalCacheManager]
+    Service --> Loader[YouTubeLoader]
+    Loader --> YT[yt-dlp / YouTube Transcript API]
+    Service --> Summary[GeminiSummaryProvider]
+    Service --> Vision[GeminiVisionAnalyzer]
+    Service --> Embed[GeminiEmbeddingProvider]
+    Embed --> TextRepo[ChromaTranscriptIndexRepository]
+    Embed --> VisionRepo[ChromaVisionIndexRepository]
+    Cache --> JSON[Video JSON cache]
+    TextRepo --> Chroma[Video-scoped ChromaDB]
+    VisionRepo --> Chroma
 ```
 
----
+## 2. 처리 흐름
 
-## 2. 데이터 흐름 및 파이프라인 (Data Pipeline Flow)
+`tubetalk process <YOUTUBE_URL>`은 다음 흐름으로 동작한다.
 
 ```mermaid
 sequenceDiagram
-    autonumber
     actor User
     participant CLI
-    participant Cache as Cache Manager
-    participant YT as YouTube & Transcript API
-    participant Media as Media Sampler (OpenCV)
-    participant Vision as Gemini Vision API
-    participant DB as ChromaDB
-    participant Agent as RAG Agent
+    participant Service as VideoService
+    participant Cache
+    participant YT as YouTube services
+    participant Gemini
+    participant Chroma
 
-    User->>CLI: tubetalk process <YouTube_URL>
-    CLI->>Cache: 로컬 캐시 확인 (./data/{video_id})
-    alt 캐시 존재 (Cache Hit)
-        Cache-->>CLI: 기존 metadata, transcript, vision_index 로드 (<=2초)
-    else 캐시 미존재 (Cache Miss)
-        CLI->>YT: 자막 추출 (1순위: API, 2순위: Whisper fallback)
-        CLI->>Media: 비디오 다운로드/스트리밍 & N초 간격 키프레임 추출
-        CLI->>Vision: 키프레임 이미지 배치 전달 및 시각적 설명 생성
-        CLI->>DB: 텍스트 자막 + 비전 인덱스 임베딩 저장
-        CLI->>Cache: JSON 및 ChromaDB 영속화
+    User->>CLI: process URL
+    CLI->>Service: process(URL)
+    Service->>Cache: metadata/transcript cache check
+    alt cache miss
+        Service->>YT: metadata and transcript fetch
+        Service->>Cache: save metadata.json, transcript.json
+    else cache hit
+        Cache-->>Service: cached metadata and transcript
     end
-    CLI-->>User: 종합 요약 & 타임스탬프 목차 출력
-    
-    User->>CLI: tubetalk chat <video_id>
-    CLI->>Agent: 대화 세션 개시
-    User->>Agent: 질의 입력 ("골 장면 어디야?")
-    Agent->>DB: 자막 & 비전 하이브리드 검색 (Top-K)
-    Agent->>Agent: 타임스탬프 출처(Citation) 검증 및 답변 합성
-    Agent-->>User: 답변 + [MM:SS] 타임스탬프 출력
+    Service->>Chroma: synchronize transcript embeddings if stale
+    Service->>Gemini: generate transcript summary if stale
+    Service->>Gemini: analyze public YouTube URL if vision index stale
+    Service->>Chroma: synchronize visual-scene embeddings if stale
+    Service-->>CLI: stage results and timings
+    CLI-->>User: summary, chapters, status, warnings
 ```
 
----
+수집 실패는 `process`를 실패시킨다. 반면 자막/비전 인덱싱과 요약 생성은 독립 단계로
+실행되므로, 해당 단계의 Gemini·네트워크 오류는 경고로 반환하고 기존 캐시를 보존한다.
 
-## 3. 모듈별 상세 설계 (Module Specifications)
-
-### 3.1 디렉토리 구조 (Directory Structure)
+## 3. 구현 구조
 
 ```text
 tubetalk/
-├── cli/
-│   ├── __init__.py
-│   ├── main.py             # Typer CLI 엔트리포인트 (commands: process, chat, summary, clean)
-│   └── ui.py               # Rich UI 포맷터 (Spinner, Markdown, Tables, Timestamps)
+├── bootstrap.py                    # Settings 기반 production wiring
+├── cli/main.py                     # process, status, summary Typer commands
 ├── core/
-│   ├── __init__.py
-│   ├── config.py           # 환경변수, 설정 및 경로 관리 (Pydantic Settings)
-│   └── cache.py            # ./data/{video_id}/ 로컬 영속화 캐시 관리자
-├── pipeline/
-│   ├── __init__.py
-│   ├── loader.py           # yt-dlp 메타데이터 파싱 & youtube-transcript-api (Whisper fallback)
-│   ├── media_processor.py  # OpenCV 기반 키프레임 추출 및 Scene Change Detection
-│   └── vision_indexer.py   # Gemini 2.5 Flash 비전 씬 디스크립터 생성
-├── storage/
-│   ├── __init__.py
-│   └── vector_store.py     # ChromaDB 클라이언트 및 듀얼 컬렉션 (Transcript/Vision) 관리
-├── agent/
-│   ├── __init__.py
-│   ├── retriever.py        # 하이브리드 Retriever (RRF / Dense Dual Search)
-│   ├── prompt.py           # 요약, 목차, 시각 Q&A 프롬프트 템플릿
-│   └── chat_session.py     # Multi-turn 대화 세션 및 메모리 관리자
-└── tests/                  # 단위 및 통합 테스트
+│   ├── cache.py                    # JSON cache와 freshness 상태
+│   └── config.py                   # Pydantic Settings
+├── domain/                         # summary, vision, index, status models
+├── ports/                          # provider/repository protocol 및 오류 경계
+├── pipeline/loader.py              # YouTube URL, metadata, transcript collection
+├── services/video_service.py       # application use cases와 단계 조율
+└── infrastructure/
+    ├── embeddings/gemini.py        # Gemini Embedding 2 adapter
+    ├── summaries/gemini.py         # structured transcript-summary adapter
+    ├── visions/gemini.py           # public YouTube URL scene analyzer
+    └── repositories/
+        ├── chroma_transcript.py    # transcript_collection
+        └── chroma_vision.py        # vision_collection
 ```
 
-### 3.2 핵심 모듈 사양
+`VideoService`는 인터페이스에만 의존하며, 실제 Gemini·Chroma 구현은
+`bootstrap.create_video_service()`가 설정에 따라 연결한다. 이 경계로 테스트에서는
+외부 API를 mock으로 대체한다.
 
-1. **`pipeline/loader.py` (자막 수집)**:
-   - `youtube-transcript-api`를 1순위로 실행하여 수초 단위 타임코드와 자막 텍스트 수집.
-   - 자막이 비활성화되었거나 자동 생성이 실패한 경우 `yt-dlp`로 오디오만 추출하여 Whisper / Gemini Audio API로 fallback 처리.
+## 4. 핵심 설계
 
-2. **`pipeline/media_processor.py` (비전 프레임 샘플링)**:
-   - `yt-dlp`로 저화질 비디오(예: 360p/480p, 용량/속도 최적화)를 임시 다운로드.
-   - `OpenCV`를 사용해 일정 시간 간격(예: 5초 기본) 샘플링 또는 프레임 차이 기반 Scene Change Detection 적용.
+### 자막 수집과 캐시
 
-3. **`pipeline/vision_indexer.py` (비전 씬 인덱서)**:
-   - 추출된 키프레임 이미지를 시간 순서대로 묶어 Gemini 2.5 Flash Multimodal API에 전송.
-   - 결과물로 `[{"timestamp": "01:23", "start_sec": 83, "description": "빨간 옷을 입은 선수가 슛을 날려 골을 넣는 장면"}, ...]` 형태의 시각적 설명 JSON 생성.
+- `YouTubeLoader.extract_video_id()`는 일반 watch URL, short URL, shorts·embed URL에서 11자 video ID를 추출한다.
+- 메타데이터는 `yt-dlp --dump-json --no-download`, 자막은 `youtube-transcript-api`로 수집한다.
+- 기본 자막 언어 우선순위는 한국어(`ko`), 영어(`en`)다.
+- `metadata.json`과 `transcript.json`이 모두 있으면 캐시 히트로 본다.
 
-4. **`storage/vector_store.py` & `agent/retriever.py` (하이브리드 RAG)**:
-   - ChromaDB에 2개의 컬렉션 구성:
-     - `transcript_collection`: 자막 텍스트 세그먼트 (타임스탬프 메타데이터 포함)
-     - `vision_collection`: 시각적 설명 세그먼트 (타임스탬프 메타데이터 포함)
-   - 사용자 질문 수신 시 듀얼 임베딩 검색 후 점수 결합(Reciprocal Rank Fusion 또는 Weighted Score)을 통해 상위 구간 추출.
+Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 있지 않다.
 
----
+### 자막 요약
 
-## 4. 로컬 데이터 저장 스키마 (Local Storage Schema)
+- `GeminiSummaryProvider`는 자막 전체를 시간 표기와 함께 전달하고 JSON 형식의 요약·목차를 요청한다.
+- `summary.json` manifest는 자막 SHA-256, 모델, 프롬프트 버전, 언어, 생성 시각을 보관한다.
+- 모델이 범위를 벗어난 목차 시간을 반환하면 한 번의 수정 요청 후 다시 검증한다.
+
+### 비전 장면과 벡터 인덱스
+
+- `GeminiVisionAnalyzer`는 공개 YouTube URL을 비디오 입력으로 Gemini에 전달한다. 장면은 전체 길이를 덮는 시간순 구간으로 요청한다.
+- `vision_index.json`에는 장면과 source URL, 모델, 프롬프트 버전, 스키마 버전, 생성 시각이 저장된다.
+- 자막은 `transcript_collection`, 장면 설명은 `vision_collection`에 명시적 벡터로 저장한다. 두 컬렉션 모두 영상별 `chromadb/` 경로에 있으며 cosine 거리를 사용한다.
+- 각 컬렉션의 manifest는 원본 해시, 임베딩 모델·차원, 레코드 수, 인덱싱 시각을 기록해 current/stale/invalid/missing 상태를 판정한다.
+
+## 5. CLI
+
+| 명령 | 동작 |
+| --- | --- |
+| `tubetalk process <url>` | 수집 또는 캐시 재사용 후 자막·요약·비전 인덱스를 최신화하고 결과를 표시 |
+| `tubetalk status [video_id]` | 전체 캐시 목록 또는 특정 영상의 캐시·인덱스 상세 상태 표시 |
+| `tubetalk summary [video_id]` | 현재 요약을 표시. ID 생략 시 캐시 영상 선택 |
+| `tubetalk summary <video_id> --generate` | 요약이 없거나 stale이면 생성 |
+
+`tubetalk chat <video_id>`와 벡터 검색 UI는 아직 제공하지 않는다.
+
+## 6. 설정과 로컬 저장소
+
+주요 환경 변수는 `GEMINI_API_KEY`, `DATA_DIR`, `SUMMARY_MODEL`, `VISION_MODEL`,
+`EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `SUMMARY_LANGUAGE`이다. 설정은 `.env`와
+환경 변수에서 읽는다.
 
 ```text
-./data/{video_id}/
-├── metadata.json           # 영상 기본정보
-├── transcript.json         # 자막 데이터
-├── vision_index.json       # 시각적 씬 설명 데이터
-├── frames/                 # (선택) 키프레임 이미지들 (jpg/png)
-└── chromadb/               # ChromaDB SQLite 및 인덱스 파일들
+data/{video_id}/
+├── metadata.json
+├── transcript.json
+├── summary.json
+├── vision_index.json
+├── index_manifest.json
+├── vision_vector_manifest.json
+└── chromadb/
 ```
 
-### 4.1 `metadata.json`
-```json
-{
-  "video_id": "dQw4w9WgXcQ",
-  "title": "Sample Video Title",
-  "duration_sec": 212,
-  "author": "Channel Name",
-  "processed_at": "2026-07-22T14:24:35+09:00",
-  "has_official_transcript": true
-}
-```
+## 7. 후속 설계 범위
 
-### 4.2 `transcript.json`
-```json
-[
-  {
-    "start_sec": 0.0,
-    "duration_sec": 3.5,
-    "text": "Hello world welcome to the video."
-  }
-]
-```
-
-### 4.3 `vision_index.json`
-```json
-[
-  {
-    "start_sec": 0,
-    "end_sec": 5,
-    "timestamp_str": "00:00",
-    "visual_summary": "밝은 조명의 스튜디오 배경, 진행자가 빨간 셔츠를 입고 등장함.",
-    "detected_objects": ["speaker", "red shirt", "studio"],
-    "keyframe_file": "frames/frame_000.jpg"
-  }
-]
-```
-
----
-
-## 5. 확정된 설계 결정 사항 (Confirmed Design Decisions)
-
-1. **LLM & Vision Provider**:
-   - Google Gemini API 전용 파이프라인 구축 (`google-genai` / `langchain-google-genai`).
-   - **비전 씬 인덱싱**: `gemini-2.5-flash` (빠른 프레임 분석 및 비용/속도 최적화).
-   - **종합 요약 및 대화형 Q&A Agent**: `gemini-2.5-pro` (복잡한 문맥 추론 및 고성능 하이브리드 RAG 답변 생성).
-
-2. **키프레임 추출 방식 및 프레임 샘플링**:
-   - **기본 모드**: 고정 5초 간격 샘플링.
-   - **옵션 모드**: OpenCV 기반 Scene Change Detection (`--detect-scenes` 플래그) 선택적 사용 지원.
-
-3. **CLI 명령어 구조 (Typer 기반 서브커맨드)**:
-   - `tubetalk process <YouTube_URL>`: 영상 분석, 자막 추출, 비전 인덱싱 및 캐시 저장 후 요약 출력.
-   - `tubetalk status [video_id]`: 로컬 캐시 전체 목록 또는 특정 비디오의 인덱싱 캐시 정보 조회.
-   - `tubetalk chat <video_id>`: 저장된 데이터 기반 터미널 대화형 Q&A 세션 실행.
-   - `tubetalk summary <video_id>`: 보관된 영상 요약 및 타임스탬프 목차 즉시 재조회 (캐시 2초 이내 출력).
-
-4. **하이브리드 검색 및 타임스탬프 검증 알고리즘**:
-   - **Dual Vector Retrieval**: ChromaDB 내 `transcript` 컬렉션과 `vision_index` 컬렉션을 독립적으로 벡터 검색.
-   - **Reciprocal Rank Fusion (RRF)**: 자막 결과와 시각적 씬 설명 검색 결과 순위를 융합.
-   - **Timestamp Citation Validator**: 답변 생성시 명시되는 타임스탬프가 실존하는 씬/자막 구간인지 검증하는 후처리 레이어 포함.
-
+- `GeminiEmbeddingProvider.embed_query()`를 사용하는 자막·비전 dual retrieval
+- RRF 결과 융합과 타임스탬프 인용 검증
+- 대화 기록을 보존하는 CLI `chat` 세션
+- 필요 시 vision provider 경계 뒤에 로컬 프레임 추출 또는 이미지 임베딩 구현

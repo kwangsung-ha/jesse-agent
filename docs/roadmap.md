@@ -18,12 +18,12 @@
   - JSON 캐시 관리자 (`core/cache.py`) 연동 및 로컬 캐싱 검증 (2초 이내 로딩)
   - `tubetalk status [video_id]` CLI 커맨드로 로컬 캐시 현황 조회 기능 구현
 
-- [x] **Task 02: ChromaDB 텍스트 자막 Vector Store 구축 (`storage/vector_store.py`)**
+- [x] **Task 02: ChromaDB 텍스트 자막 Vector Store 구축 (`infrastructure/repositories/chroma_transcript.py`)** `docs/tasks/02-vector-store.md`
   - ChromaDB Local Client 연동 및 `transcript_collection` 스키마 정의
   - 타임스탬프 메타데이터 포함 자막 청크 임베딩 저작
 
-- [x] **Task 03: 자막 기반 종합 요약 & 타임스탬프 목차 파이프라인**
-  - Gemini 2.5 Pro 기반 요약 & 타임스탬프 목차 프롬프트 엔지니어링
+- [x] **Task 03: 자막 기반 종합 요약 & 타임스탬프 목차 파이프라인** `docs/tasks/03-summary-chaptering.md`
+  - Gemini Flash-Lite 기반 구조화된 요약·목차 생성 및 자막 근거 타임스탬프 검증
 
 ## Phase 2: Vision Scene Indexing 파이프라인
 - [x] **Task 04: Gemini 직접 비디오 씬 분석 기반 (`infrastructure/visions/`)** `docs/tasks/04-gemini-video-analysis.md`
@@ -39,7 +39,8 @@
   - 텍스트 자막 + 비전 씬 디스크립터 검색결과 Reciprocal Rank Fusion
   - Timestamp Citation 검증 후처리
 
-- [ ] **Task 07: Typer & Rich CLI 인터페이스 완성 (`cli/`)**
-  - `tubetalk process <url>`
-  - `tubetalk chat <video_id>` (Multi-turn interactive conversation)
-  - `tubetalk summary <video_id>`
+- [i] **Task 07: Typer & Rich CLI 인터페이스 완성 (`cli/`)**
+  - [x] `tubetalk process <url>`
+  - [x] `tubetalk status [video_id]`
+  - [x] `tubetalk summary [video_id]` 및 `--generate`
+  - [ ] `tubetalk chat <video_id>` (멀티턴 대화형 Q&A)

@@ -1,81 +1,103 @@
-# PRD: YouTube Video Intelligence Agent (CLI & Multimodal)
+# PRD: TubeTalk — YouTube Video Intelligence Agent
 
-## 1. 프로젝트 개요 (Overview)
-* **프로젝트명**: YouTube Video Intelligence Agent (CLI)
-* **목적**: 유튜브 URL을 입력받아 자막(Text)과 비전(Vision) 데이터를 복합적으로 분석하여 정교한 요약, 타임스탬프 목차 생성, 비전 기반 장면 탐색, 그리고 질의응답(Q&A)을 제공하는 CLI 기반 AI Agent 개발.
-* **개발 배경 및 핵심 가치**:
-  * 기존 텍스트 자막 중심 요약 서비스는 시각적 이벤트(예: 스포츠 골 장면, 화면 내 그래프/코드 시각화, 인물 등장 등)를 포착하지 못하는 한계 존재.
-  * 멀티모달 API(Gemini 1.5 Pro / GPT-4o) 및 비전 키프레임 인덱싱을 통해 텍스트+시각 하이브리드 RAG 파이프라인 구축.
-  * 백엔드/ML 플랫폼 엔지니어 관점에서 LLM Orchestration, Vector DB, Multimodal Scene Indexing, Caching Architecture 실무 역량 확보.
+## 1. 프로젝트 개요
 
----
+- **프로젝트명**: TubeTalk
+- **목적**: YouTube URL의 자막과 시각적 장면 정보를 로컬에 축적하고, 요약·타임스탬프 목차·향후 하이브리드 검색과 Q&A를 제공하는 CLI AI 에이전트
+- **핵심 가치**: 자막만으로 찾기 어려운 화면 속 인물·객체·차트·행동을 비전 장면 설명으로 함께 인덱싱한다.
 
-## 2. 주요 기능 요구사항 (Key Features)
+### 현재 제공 범위
 
-### F-1. 로컬 영속성 및 전처리 (Ingestion & Local Caching)
-* **URL 파싱 및 캐시 검사**: 입력된 유튜브 `video_id`를 기반으로 로컬 캐시(`./data/{video_id}/`) 존재 여부 우선 확인.
-* **텍스트 자막 파싱**: 1순위로 공식/자동 자막 추출 (`youtube-transcript-api`). 자막 부재 시 Whisper API fallback.
-* **키프레임 추출 및 비전 씬 인덱싱 (Vision Scene Indexing)**:
-  * 영상 다운로드/스트리밍 후 주기적 샘플링(예: 3~5초 간격) 또는 Scene Change Detection으로 주요 키프레임 추출.
-  * 전처리 단계에서 비전 LLM API(Gemini 1.5 Pro)를 호출해 각 프레임/구간별 시각적 설명(Visual Description) 데이터 구축.
-* **로컬 저장**: 추출된 자막, 비전 씬 인덱스 JSON, Vector DB(ChromaDB) 데이터를 로컬 디렉토리에 영속화.
+현재 CLI는 다음 기능을 제공한다.
 
-### F-2. 정교한 요약 및 하이브리드 목차 생성 (Multimodal Chaptering)
-* **종합 요약**: 자막 텍스트와 비전 인덱스를 결합하여 영상 전체의 핵심 내용을 3~5줄로 정리.
-* **타임스탬프 목차**: `[MM:SS] 주제 및 시각적 요약` 형태의 구조화된 목차 생성.
+- YouTube 메타데이터와 한국어/영어 자막 수집 및 로컬 캐시
+- Gemini Embedding 2 기반 자막 벡터 인덱스
+- Gemini Flash-Lite 기반 자막 요약과 타임스탬프 목차
+- Gemini의 공개 YouTube URL 직접 분석 기반 시각 장면 설명 및 비전 벡터 인덱스
+- 캐시와 각 인덱스의 최신 상태 조회
 
-### F-3. 비전 연동 대화형 CLI Q&A (Hybrid Search & Q&A)
-* **하이브리드 RAG**: 사용자 질문 수신 시 텍스트 자막 임베딩 검색과 비전 씬 인덱스 검색을 함께 수행.
-* **시각적 질의 대응**: "골 장면 어디야?", "빨간 옷 입은 사람이 등장하는 구간 알려줘" 등 자막에 없는 시각적 이벤트 탐색 및 타임스탬프 반환.
-* **대화 맥락 유지**: CLI 세션 동안 히스토리를 유지하여 연속적 Multi-turn 질의응답 지원.
+자막·비전 검색 결과를 융합하는 검색 API와 멀티턴 `chat` Q&A는 후속 범위다.
 
----
+## 2. 기능 요구사항
 
-## 3. 시스템 아키텍처 및 기술 스택 (Technical Architecture)
+### F-1. 로컬 영속성 및 수집
 
-| 구분 | 기술 스택 / 도구 | 역할 및 상세 설명 |
-| :--- | :--- | :--- |
-| **Interface** | Python CLI (Typer / Click / Rich) | 터미널 기반 상호작용 UI, 가독성 높은 텍스트/타임스탬프 출력 |
-| **Orchestration** | LangChain / LlamaIndex | RAG 파이프라인 구성, 메모리 관리 및 에이전트 루프 제어 |
-| **Multimodal LLM** | Gemini 1.5 Pro / GPT-4o API | 비전 프레임 분석, 롱컨텍스트 종합 요약 및 최종 Q&A 생성 |
-| **Vector & Data Store** | ChromaDB (Local) + JSON File Store | 텍스트/비전 인덱스 임베딩 저장 및 `./data/` 로컬 캐싱 |
-| **Media Processing** | yt-dlp, OpenCV (cv2), ffmpeg | 영상 다운로드, 키프레임 프레임 샘플링 및 오디오 추출 |
+- YouTube URL에서 `video_id`를 추출하고 `./data/{video_id}/` 캐시를 먼저 확인한다.
+- 캐시가 없으면 `yt-dlp`로 메타데이터를, `youtube-transcript-api`로 한국어/영어 자막을 수집한다.
+- 메타데이터·자막·요약·비전 장면·벡터 인덱스 manifest를 영상별 로컬 디렉터리에 저장한다.
+- 캐시가 있으면 원본 수집을 생략하고, 원본 데이터·모델·프롬프트·임베딩 설정이 변경된 인덱스만 갱신한다.
 
----
+현재 자막이 없는 영상에 대한 Whisper 또는 오디오 기반 fallback은 지원하지 않는다.
 
-## 4. 로컬 데이터 구조 (Local Persistence Schema)
+### F-2. 자막 요약 및 타임스탬프 목차
+
+- 자막에서 근거를 찾을 수 있는 3~5문장 요약과 시간순 목차를 생성한다.
+- 목차의 `start_sec`는 실제 자막 시간 범위 안에 있는지 검증한다.
+- 생성 결과와 자막 해시·모델·프롬프트·언어 정보를 `summary.json`에 저장해 최신성을 판단한다.
+
+현재 요약 입력은 자막이며, 비전 장면 설명을 결합한 멀티모달 요약은 후속 범위다.
+
+### F-3. 비전 씬 인덱싱
+
+- 공개 YouTube URL을 Gemini에 직접 제공해 영상 전체를 덮는 시간순 시각 장면 설명을 생성한다.
+- 장면마다 시작/종료 시간, 시각적 설명, 감지 객체를 저장한다.
+- 장면 설명을 Gemini Embedding 2로 임베딩하고 영상별 ChromaDB `vision_collection`에 저장한다.
+- 비전 분석이나 인덱싱 실패는 이미 수집된 메타데이터·자막·요약 캐시를 삭제하지 않고 경고로 보고한다.
+
+로컬 영상 다운로드, OpenCV 키프레임 추출, 프레임 이미지 저장은 현재 범위에 포함하지 않는다.
+
+### F-4. 하이브리드 검색 및 Q&A (예정)
+
+- 자막과 비전 장면 컬렉션을 각각 검색한 뒤 Reciprocal Rank Fusion(RRF)으로 결과를 결합한다.
+- 답변에 포함한 타임스탬프가 실제 자막 또는 장면 구간인지 검증한다.
+- CLI 세션에서 멀티턴 대화 맥락을 유지한다.
+
+## 3. 기술 스택
+
+| 구분 | 사용 기술 | 역할 |
+| --- | --- | --- |
+| CLI | Python, Typer, Rich | `process`, `status`, `summary` 명령 및 표 출력 |
+| 설정 | Pydantic Settings | `.env`와 환경 변수 기반 설정 |
+| 수집 | `yt-dlp`, `youtube-transcript-api` | 메타데이터와 자막 수집 |
+| 생성 모델 | Google Gemini (`google-genai`) | 자막 요약 및 공개 URL 비전 장면 분석 |
+| 임베딩 | Gemini Embedding 2 | 자막 청크와 비전 설명 임베딩 |
+| 저장소 | ChromaDB PersistentClient + JSON | 영상별 벡터 컬렉션·캐시·manifest 영속화 |
+| 품질 | pytest, pytest-cov, Ruff, Poe the Poet | 테스트·90% 커버리지 기준·정적 검사 |
+
+## 4. 로컬 데이터 구조
+
 ```text
-./data/
+data/
 └── {video_id}/
-    ├── metadata.json           # 영상 제목, 길이, 파싱 일시 등
-    ├── transcript.json         # 타임스탬프별 자막 데이터
-    ├── vision_index.json       # [MM:SS] 별 비전 LLM 씬 설명 데이터
-    ├── frames/                 # 추출된 키프레임 이미지 (선택적)
-    └── chromadb/               # ChromaDB 임베딩 데이터베이스
+    ├── metadata.json                # 제목, 채널, 길이, 원본 URL 등
+    ├── transcript.json              # 타임스탬프 자막
+    ├── summary.json                 # 자막 요약, 목차, 생성 manifest
+    ├── vision_index.json            # 시각 장면, 생성 manifest
+    ├── index_manifest.json          # 자막 벡터 인덱스 manifest
+    ├── vision_vector_manifest.json  # 비전 벡터 인덱스 manifest
+    └── chromadb/                    # transcript_collection, vision_collection
 ```
 
----
+## 5. 단계별 로드맵
 
-## 5. 단계별 개발 로드맵 (Milestones)
+### Phase 1: 로컬 캐시·자막 인덱스·요약 — 완료
 
-### Phase 1: CLI & Text RAG 기반 구축
-* CLI 인터페이스 구현 (URL 입력 받기).
-* 자막 추출 파이프라인 및 로컬 파일 캐싱(JSON) 구조 설계.
-* 자막 기반 전체 요약 및 타임스탬프 목차 출력 기능 개발.
+- 수집, 영상별 JSON 캐시, 캐시 상태 CLI
+- 자막 청크의 명시적 Gemini 임베딩과 ChromaDB 인덱스
+- 자막 기반 요약 및 타임스탬프 목차
 
-### Phase 2: Vision Scene Indexing 파이프라인 추가
-* `yt-dlp` 및 OpenCV를 활용한 N초 간격 키프레임 샘플링 모듈 개발.
-* Gemini 1.5 Pro 비전 API 호출을 통해 프레임별 시각적 설명 생성 및 `vision_index.json` 구축.
-* 텍스트 자막과 비전 씬 데이터를 병합하는 인덱서 구현.
+### Phase 2: Gemini 비전 장면 인덱싱 — 완료
 
-### Phase 3: Hybrid Retrieval & Q&A Agent 완성
-* 텍스트+비전 하이브리드 Vector DB Retrieval 파이프라인 완성.
-* 시각적 질문 대응 프롬프트 엔지니어링 및 타임스탬프 출처(Citation) 검증.
-* CLI 대화형 멀티턴 질의응답 루프 연결.
+- 공개 URL 직접 분석 기반 시각 장면 설명 캐시
+- 장면 설명의 ChromaDB 벡터 인덱스
 
----
+### Phase 3: 하이브리드 검색 및 대화형 CLI — 진행 예정
 
-## 6. 성공 지표 (Success Metrics)
-* **비전 탐색 정확도**: 시각적 이벤트 질문("골 장면", "그래프 제시 구간" 등) 검색 시 실제 타임스탬프 오차 $\le$ 10초 이내.
-* **캐시 효율성**: 동일 영상 재검색 시 전처리 없이 로컬 캐시를 통한 CLI 세션 로딩 시간 $\le$ 2초.
-* **Q&A 신뢰도**: 답변 내 명시된 타임스탬프 구간의 실제 내용 일치율 90% 이상.
+- Dual Retriever, RRF, 타임스탬프 인용 검증
+- 멀티턴 `tubetalk chat <video_id>`
+
+## 6. 성공 지표
+
+- 동일 영상 재처리에서 유효한 캐시와 인덱스를 재사용한다.
+- 각 캐시·인덱스는 원본 해시와 모델·프롬프트·임베딩 설정 변경을 감지해 stale 상태를 표시한다.
+- 하이브리드 Q&A 완성 후 시각 이벤트 검색의 타임스탬프 오차를 10초 이하, 답변 인용 일치율을 90% 이상으로 측정한다.
