@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from tubetalk.core.config import settings
+from pydantic import BaseModel, ConfigDict
+
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
@@ -29,11 +30,30 @@ from tubetalk.domain.vision import (
 )
 
 
+class CacheFreshnessPolicy(BaseModel):
+    """Expected derived-artifact settings used for cache status checks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary_model: str = "gemini-3.5-flash-lite"
+    summary_prompt_version: str = "summary-chapters-v1"
+    summary_language: str = "ko"
+    vision_model: str = "gemini-3.5-flash"
+    vision_prompt_version: str = "vision-scenes-v2-30s"
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dimension: int = 768
+
+
 class LocalCacheManager:
     """Manages local JSON file cache under ``data/{video_id}/``."""
 
-    def __init__(self, data_dir: Optional[Path] = None) -> None:
-        self._data_dir = data_dir or settings.data_dir
+    def __init__(
+        self,
+        data_dir: Optional[Path] = None,
+        freshness_policy: CacheFreshnessPolicy = CacheFreshnessPolicy(),
+    ) -> None:
+        self._data_dir = data_dir or Path("./data")
+        self._freshness_policy = freshness_policy
 
     # ------------------------------------------------------------------
     # Directory helpers
@@ -243,8 +263,8 @@ class LocalCacheManager:
                 vision_status = self.get_vision_index_status(
                     video_id,
                     source_url=source_url,
-                    model=settings.vision_model,
-                    prompt_version=settings.vision_prompt_version,
+                    model=self._freshness_policy.vision_model,
+                    prompt_version=self._freshness_policy.vision_prompt_version,
                 )
             else:
                 vision_status = VisionIndexStatus(state=CacheState.INVALID)
@@ -265,9 +285,9 @@ class LocalCacheManager:
         summary_status = self.get_summary_status(
             video_id,
             transcript,
-            model=settings.summary_model,
-            prompt_version=settings.summary_prompt_version,
-            language=settings.summary_language,
+            model=self._freshness_policy.summary_model,
+            prompt_version=self._freshness_policy.summary_prompt_version,
+            language=self._freshness_policy.summary_language,
         )
         summary_entry = summary_status.entry
 
@@ -377,8 +397,10 @@ class LocalCacheManager:
             ).hexdigest()
             if (
                 manifest.get("transcript_sha256") != transcript_sha256
-                or manifest.get("embedding_model") != settings.embedding_model
-                or manifest.get("embedding_dimension") != settings.embedding_dimension
+                or manifest.get("embedding_model")
+                != self._freshness_policy.embedding_model
+                or manifest.get("embedding_dimension")
+                != self._freshness_policy.embedding_dimension
             ):
                 return {**result, "transcript_index_state": "stale"}
 

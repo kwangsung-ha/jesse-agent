@@ -10,7 +10,6 @@ from typing import Any, Optional
 import chromadb
 from chromadb.errors import ChromaError
 
-from tubetalk.core.config import settings
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
 from tubetalk.ports.embedding import EmbeddingProvider
@@ -43,10 +42,10 @@ class ChromaVisionIndexRepository:
         self,
         video_id: str,
         data_dir: Optional[Path] = None,
-        embedding_model: str = settings.embedding_model,
-        embedding_dimension: int = settings.embedding_dimension,
+        embedding_model: str = "gemini-embedding-2",
+        embedding_dimension: int = 768,
     ) -> None:
-        root_dir = data_dir or settings.data_dir
+        root_dir = data_dir or Path("./data")
         self.video_id = video_id
         self.path = root_dir / video_id / "chromadb"
         self.manifest_path = root_dir / video_id / "vision_vector_manifest.json"

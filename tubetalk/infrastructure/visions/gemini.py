@@ -8,7 +8,6 @@ from google import genai
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from tubetalk.core.config import settings
 from tubetalk.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
 from tubetalk.ports.vision import VisionProviderError
 
@@ -19,7 +18,7 @@ class GeminiVisionAnalyzer:
     def __init__(
         self,
         api_key: str,
-        model: str = settings.vision_model,
+        model: str = "gemini-3.5-flash",
         client: Optional[Any] = None,
     ) -> None:
         if not api_key:

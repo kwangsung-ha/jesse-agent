@@ -5,6 +5,7 @@ from typing import Any
 
 from tubetalk.bootstrap import create_video_service
 from tubetalk.core.config import Settings
+from tubetalk.domain.transcript_index import TranscriptChunkPolicy
 
 
 def test_create_video_service_selects_gemini_and_chroma(
@@ -36,6 +37,7 @@ def test_create_video_service_selects_gemini_and_chroma(
         data_dir=tmp_path,
         embedding_model="gemini-embedding-2",
         embedding_dimension=768,
+        chunk_policy=TranscriptChunkPolicy(max_seconds=45.0, max_characters=1200),
     )
     summary_provider.assert_called_once_with(
         api_key="key", model="gemini-3.5-flash-lite"

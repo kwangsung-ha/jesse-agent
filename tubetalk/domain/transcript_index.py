@@ -6,11 +6,26 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from tubetalk.core.config import settings
+from pydantic import BaseModel, ConfigDict, Field
+
 from tubetalk.domain.transcript import Transcript
 
 INDEX_SCHEMA_VERSION = 1
 CHUNK_POLICY_VERSION = "45s-1200chars-v1"
+
+
+class TranscriptChunkPolicy(BaseModel):
+    """Application-supplied limits for retrieval-sized transcript chunks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    max_seconds: float = Field(gt=0)
+    max_characters: int = Field(gt=0)
+
+
+DEFAULT_TRANSCRIPT_CHUNK_POLICY = TranscriptChunkPolicy(
+    max_seconds=45.0, max_characters=1200
+)
 
 
 @dataclass(frozen=True)
@@ -46,12 +61,9 @@ class IndexManifest:
 
 def chunk_transcript(
     transcript: Transcript,
-    max_seconds: float = settings.transcript_chunk_max_seconds,
-    max_characters: int = settings.transcript_chunk_max_characters,
+    policy: TranscriptChunkPolicy = DEFAULT_TRANSCRIPT_CHUNK_POLICY,
 ) -> list[TranscriptChunk]:
     """Merge consecutive transcript segments into bounded retrieval chunks."""
-    if max_seconds <= 0 or max_characters <= 0:
-        raise ValueError("Transcript chunk limits must be positive")
     chunks: list[TranscriptChunk] = []
     chunk_texts: list[str] = []
     chunk_start: Optional[float] = None
@@ -87,7 +99,8 @@ def chunk_transcript(
             chunk_start if chunk_start is not None else start_sec
         )
         if chunk_texts and (
-            candidate_characters > max_characters or candidate_duration > max_seconds
+            candidate_characters > policy.max_characters
+            or candidate_duration > policy.max_seconds
         ):
             emit(segment_index - 1)
             chunk_texts = []

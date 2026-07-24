@@ -8,7 +8,6 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from tubetalk.core.config import settings
 from tubetalk.domain.summary import Chapter, VideoSummary
 from tubetalk.domain.transcript import Transcript
 from tubetalk.ports.summary import SummaryProviderError
@@ -20,7 +19,7 @@ class GeminiSummaryProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = settings.summary_model,
+        model: str = "gemini-3.5-flash-lite",
         client: Optional[Any] = None,
     ) -> None:
         """Create a summary provider using the configured Gemini model."""

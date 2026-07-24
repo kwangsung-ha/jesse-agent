@@ -7,7 +7,6 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from tubetalk.core.config import settings
 from tubetalk.ports.embedding import EmbeddingProviderError
 
 
@@ -17,8 +16,8 @@ class GeminiEmbeddingProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = settings.embedding_model,
-        dimension: int = settings.embedding_dimension,
+        model: str = "gemini-embedding-2",
+        dimension: int = 768,
         client: Optional[Any] = None,
     ) -> None:
         """Create a provider using the supplied Gemini API key."""

@@ -10,6 +10,7 @@ import pytest
 from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
+    TranscriptChunkPolicy,
     chunk_transcript,
     format_document,
 )
@@ -83,8 +84,7 @@ def test_chunk_transcript_splits_by_duration_and_preserves_boundaries() -> None:
     """Chunks should stop before exceeding the configured duration."""
     chunks = chunk_transcript(
         _transcript((0, 20, "One"), (20, 20, "Two"), (40, 20, "Three")),
-        max_seconds=45,
-        max_characters=1200,
+        policy=TranscriptChunkPolicy(max_seconds=45, max_characters=1200),
     )
 
     assert chunks[0].text == "One Two"
@@ -101,8 +101,7 @@ def test_chunk_transcript_splits_by_characters_without_overlap() -> None:
     """Character limits should create separate, non-duplicated chunks."""
     chunks = chunk_transcript(
         _transcript((0, 0, "alpha"), (1, 0, "bravo"), (2, 0, "charlie")),
-        max_seconds=45,
-        max_characters=11,
+        policy=TranscriptChunkPolicy(max_seconds=45, max_characters=11),
     )
 
     assert [chunk.text for chunk in chunks] == ["alpha bravo", "charlie"]

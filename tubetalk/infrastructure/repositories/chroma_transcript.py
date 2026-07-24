@@ -9,13 +9,14 @@ from typing import Any, Optional
 import chromadb
 from chromadb.errors import ChromaError
 
-from tubetalk.core.config import settings
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
+    DEFAULT_TRANSCRIPT_CHUNK_POLICY,
     INDEX_SCHEMA_VERSION,
     IndexManifest,
+    TranscriptChunkPolicy,
     chunk_transcript,
     format_document,
     transcript_sha256,
@@ -36,16 +37,18 @@ class ChromaTranscriptIndexRepository:
         self,
         video_id: str,
         data_dir: Optional[Path] = None,
-        embedding_model: str = settings.embedding_model,
-        embedding_dimension: int = settings.embedding_dimension,
+        embedding_model: str = "gemini-embedding-2",
+        embedding_dimension: int = 768,
+        chunk_policy: TranscriptChunkPolicy = DEFAULT_TRANSCRIPT_CHUNK_POLICY,
     ) -> None:
         """Open the Chroma database beneath the video's cache directory."""
-        root_dir = data_dir or settings.data_dir
+        root_dir = data_dir or Path("./data")
         self.video_id = video_id
         self.path = root_dir / video_id / "chromadb"
         self.manifest_path = root_dir / video_id / "index_manifest.json"
         self.embedding_model = embedding_model
         self.embedding_dimension = embedding_dimension
+        self.chunk_policy = chunk_policy
         try:
             self.path.mkdir(parents=True, exist_ok=True)
             self._client = chromadb.PersistentClient(path=str(self.path))
@@ -81,7 +84,7 @@ class ChromaTranscriptIndexRepository:
         if transcript is None:
             return status
         try:
-            expected_chunks = len(chunk_transcript(transcript))
+            expected_chunks = len(chunk_transcript(transcript, self.chunk_policy))
             is_current = (
                 manifest.schema_version == INDEX_SCHEMA_VERSION
                 and manifest.transcript_sha256 == transcript_sha256(transcript)
@@ -125,7 +128,7 @@ class ChromaTranscriptIndexRepository:
             raise ValueError(
                 "Embedding provider settings do not match the vector repository"
             )
-        chunks = chunk_transcript(transcript)
+        chunks = chunk_transcript(transcript, self.chunk_policy)
         documents = [format_document(chunk.text, title) for chunk in chunks]
         embeddings = embedding_provider.embed_documents(documents)
         if len(embeddings) != len(chunks):

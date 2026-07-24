@@ -14,7 +14,8 @@
 - [x] **Check M.2**: 상태값과 시각 표현을 공통 타입으로 강화한다.
 - [x] **Check M.3**: loader의 외부 라이브러리 오류를 adapter 전용 오류 경계로
   변환한다.
-- [ ] **Check M.4**: 전역 settings 의존을 정책 객체와 bootstrap 주입으로 교체한다.
+- [x] **Check M.4**: 전역 settings 의존을 불변 Pydantic 정책 객체와 bootstrap
+  주입으로 교체한다.
 - [ ] **Check M.5**: 텍스트·비전 Chroma 저장소의 공통 lifecycle과 manifest 검증을
   내부 기반으로 추출한다.
 - [ ] **Check M.6**: `VideoService`의 수집·인덱싱·요약·비전 orchestration을
