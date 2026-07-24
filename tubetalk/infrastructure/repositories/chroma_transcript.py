@@ -10,6 +10,7 @@ import chromadb
 from chromadb.errors import ChromaError
 
 from tubetalk.core.config import settings
+from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
     INDEX_SCHEMA_VERSION,
@@ -51,12 +52,12 @@ class ChromaTranscriptIndexRepository:
         except (ChromaError, OSError) as error:
             raise TranscriptIndexRepositoryError(str(error)) from error
 
-    def needs_indexing(self, segments: list[dict[str, Any]]) -> bool:
+    def needs_indexing(self, transcript: Transcript) -> bool:
         """Return whether the local index differs from its source transcript."""
-        return self.get_index_status(segments).state != "current"
+        return self.get_index_status(transcript).state != "current"
 
     def get_index_status(
-        self, segments: Optional[list[dict[str, Any]]]
+        self, transcript: Optional[Transcript]
     ) -> TranscriptIndexStatus:
         """Read manifest and collection state without exposing Chroma details."""
         if not self.manifest_path.is_file():
@@ -72,13 +73,13 @@ class ChromaTranscriptIndexRepository:
             embedding_dimension=manifest.embedding_dimension,
             indexed_at=manifest.indexed_at,
         )
-        if segments is None:
+        if transcript is None:
             return status
         try:
-            expected_chunks = len(chunk_transcript(segments))
+            expected_chunks = len(chunk_transcript(transcript))
             is_current = (
                 manifest.schema_version == INDEX_SCHEMA_VERSION
-                and manifest.transcript_sha256 == transcript_sha256(segments)
+                and manifest.transcript_sha256 == transcript_sha256(transcript)
                 and manifest.embedding_model == self.embedding_model
                 and manifest.embedding_dimension == self.embedding_dimension
                 and manifest.chunk_policy_version == CHUNK_POLICY_VERSION
@@ -107,7 +108,7 @@ class ChromaTranscriptIndexRepository:
 
     def index_transcript(
         self,
-        segments: list[dict[str, Any]],
+        transcript: Transcript,
         title: str,
         embedding_provider: EmbeddingProvider,
     ) -> int:
@@ -119,7 +120,7 @@ class ChromaTranscriptIndexRepository:
             raise ValueError(
                 "Embedding provider settings do not match the vector repository"
             )
-        chunks = chunk_transcript(segments)
+        chunks = chunk_transcript(transcript)
         documents = [format_document(chunk.text, title) for chunk in chunks]
         embeddings = embedding_provider.embed_documents(documents)
         if len(embeddings) != len(chunks):
@@ -149,7 +150,7 @@ class ChromaTranscriptIndexRepository:
                         for chunk in chunks
                     ],
                 )
-            self._save_manifest(segments, len(chunks))
+            self._save_manifest(transcript, len(chunks))
         except (ChromaError, OSError) as error:
             raise TranscriptIndexRepositoryError(str(error)) from error
         return len(chunks)
@@ -169,10 +170,10 @@ class ChromaTranscriptIndexRepository:
         self._client.delete_collection(name=self.collection_name)
         return self._create_collection()
 
-    def _save_manifest(self, segments: list[dict[str, Any]], chunk_count: int) -> None:
+    def _save_manifest(self, transcript: Transcript, chunk_count: int) -> None:
         manifest = IndexManifest(
             schema_version=INDEX_SCHEMA_VERSION,
-            transcript_sha256=transcript_sha256(segments),
+            transcript_sha256=transcript_sha256(transcript),
             embedding_model=self.embedding_model,
             embedding_dimension=self.embedding_dimension,
             chunk_policy_version=CHUNK_POLICY_VERSION,

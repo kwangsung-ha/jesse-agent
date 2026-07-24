@@ -1,8 +1,9 @@
 """Port for providers that generate transcript-grounded summaries."""
 
-from typing import Any, Protocol
+from typing import Protocol
 
 from tubetalk.domain.summary import VideoSummary
+from tubetalk.domain.transcript import Transcript
 
 
 class SummaryProviderError(Exception):
@@ -14,7 +15,7 @@ class SummaryProvider(Protocol):
 
     def generate_summary(
         self,
-        transcript: list[dict[str, Any]],
+        transcript: Transcript,
         *,
         title: str,
         language: str,

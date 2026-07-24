@@ -6,15 +6,22 @@ from typing import Any
 import pytest
 from httpx import HTTPError
 
+from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.infrastructure.summaries.gemini import GeminiSummaryProvider
 from tubetalk.ports.summary import SummaryProviderError
 
 
-def _transcript() -> list[dict[str, object]]:
-    return [
-        {"start_sec": 0.0, "duration_sec": 10.0, "text": "영상 소개입니다."},
-        {"start_sec": 10.0, "duration_sec": 15.0, "text": "핵심 내용을 설명합니다."},
-    ]
+def _transcript() -> Transcript:
+    return Transcript(
+        segments=(
+            TranscriptSegment(
+                start_sec=0.0, duration_sec=10.0, text="영상 소개입니다."
+            ),
+            TranscriptSegment(
+                start_sec=10.0, duration_sec=15.0, text="핵심 내용을 설명합니다."
+            ),
+        )
+    )
 
 
 def test_gemini_summary_provider_requests_structured_flash_lite_output(
@@ -130,5 +137,7 @@ def test_gemini_summary_provider_rejects_empty_transcript(mocker: Any) -> None:
     provider = GeminiSummaryProvider(api_key="key", client=client)
 
     with pytest.raises(SummaryProviderError, match="empty transcript"):
-        provider.generate_summary([], title="예시 영상", language="ko")
+        provider.generate_summary(
+            Transcript(segments=()), title="예시 영상", language="ko"
+        )
     client.models.generate_content.assert_not_called()

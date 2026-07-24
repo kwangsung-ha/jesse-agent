@@ -3,9 +3,10 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
 from tubetalk.core.config import settings
+from tubetalk.domain.transcript import Transcript
 
 INDEX_SCHEMA_VERSION = 1
 CHUNK_POLICY_VERSION = "45s-1200chars-v1"
@@ -37,7 +38,7 @@ class IndexManifest:
 
 
 def chunk_transcript(
-    segments: list[dict[str, Any]],
+    transcript: Transcript,
     max_seconds: float = settings.transcript_chunk_max_seconds,
     max_characters: int = settings.transcript_chunk_max_characters,
 ) -> list[TranscriptChunk]:
@@ -65,8 +66,12 @@ def chunk_transcript(
             )
         )
 
-    for segment_index, segment in enumerate(segments):
-        text, start_sec, end_sec = _validate_segment(segment)
+    for segment_index, segment in enumerate(transcript.segments):
+        text, start_sec, end_sec = (
+            segment.text.strip(),
+            segment.start_sec,
+            segment.end_sec,
+        )
         if previous_start is not None and start_sec < previous_start:
             raise ValueError("Transcript segments must be ordered by start_sec")
         previous_start = start_sec
@@ -88,7 +93,7 @@ def chunk_transcript(
         chunk_texts.append(text)
         chunk_end = end_sec
     if chunk_texts:
-        emit(len(segments) - 1)
+        emit(len(transcript) - 1)
     return chunks
 
 
@@ -97,22 +102,19 @@ def format_document(text: str, title: str) -> str:
     return f"title: {title} | text: {text}"
 
 
-def transcript_sha256(segments: list[dict[str, Any]]) -> str:
+def transcript_sha256(transcript: Transcript) -> str:
     """Return a stable digest used to detect transcript changes."""
     serialized = json.dumps(
-        segments, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        [
+            {
+                "start_sec": segment.start_sec,
+                "duration_sec": segment.duration_sec,
+                "text": segment.text,
+            }
+            for segment in transcript.segments
+        ],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
     )
     return hashlib.sha256(serialized.encode()).hexdigest()
-
-
-def _validate_segment(segment: dict[str, Any]) -> tuple[str, float, float]:
-    text = segment.get("text")
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError("Each transcript segment requires non-empty text")
-    start_sec = segment.get("start_sec")
-    if not isinstance(start_sec, (int, float)):
-        raise ValueError("Each transcript segment requires numeric start_sec")
-    duration_sec = segment.get("duration_sec", 0.0)
-    if not isinstance(duration_sec, (int, float)):
-        raise ValueError("duration_sec must be numeric when provided")
-    return text.strip(), float(start_sec), float(start_sec + duration_sec)

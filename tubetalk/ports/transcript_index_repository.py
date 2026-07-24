@@ -2,8 +2,9 @@
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol
+from typing import Optional, Protocol
 
+from tubetalk.domain.transcript import Transcript
 from tubetalk.ports.embedding import EmbeddingProvider
 
 
@@ -26,19 +27,19 @@ class TranscriptIndexRepository(Protocol):
     """Persist and validate one video's transcript search index."""
 
     @abstractmethod
-    def needs_indexing(self, segments: list[dict[str, Any]]) -> bool:
+    def needs_indexing(self, transcript: Transcript) -> bool:
         """Return whether the stored index differs from its source transcript."""
 
     @abstractmethod
     def get_index_status(
-        self, segments: Optional[list[dict[str, Any]]]
+        self, transcript: Optional[Transcript]
     ) -> TranscriptIndexStatus:
         """Return current, stale, invalid, or missing index state."""
 
     @abstractmethod
     def index_transcript(
         self,
-        segments: list[dict[str, Any]],
+        transcript: Transcript,
         title: str,
         embedding_provider: EmbeddingProvider,
     ) -> int:

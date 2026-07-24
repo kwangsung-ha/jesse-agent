@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
     chunk_transcript,
@@ -30,6 +31,15 @@ class FakeEmbeddingProvider:
     def embed_documents(self, documents: list[str]) -> list[list[float]]:
         self.documents = documents
         return [[float(index), 0.0, 1.0] for index in range(len(documents))]
+
+
+def _transcript(*segments: tuple[float, float, str]) -> Transcript:
+    return Transcript(
+        segments=tuple(
+            TranscriptSegment(start_sec=start, duration_sec=duration, text=text)
+            for start, duration, text in segments
+        )
+    )
 
 
 def _make_store(
@@ -72,11 +82,7 @@ def test_creates_video_scoped_chroma_directory(tmp_path: Path, mocker: Any) -> N
 def test_chunk_transcript_splits_by_duration_and_preserves_boundaries() -> None:
     """Chunks should stop before exceeding the configured duration."""
     chunks = chunk_transcript(
-        [
-            {"start_sec": 0, "duration_sec": 20, "text": "One"},
-            {"start_sec": 20, "duration_sec": 20, "text": "Two"},
-            {"start_sec": 40, "duration_sec": 20, "text": "Three"},
-        ],
+        _transcript((0, 20, "One"), (20, 20, "Two"), (40, 20, "Three")),
         max_seconds=45,
         max_characters=1200,
     )
@@ -94,11 +100,7 @@ def test_chunk_transcript_splits_by_duration_and_preserves_boundaries() -> None:
 def test_chunk_transcript_splits_by_characters_without_overlap() -> None:
     """Character limits should create separate, non-duplicated chunks."""
     chunks = chunk_transcript(
-        [
-            {"start_sec": 0, "text": "alpha"},
-            {"start_sec": 1, "text": "bravo"},
-            {"start_sec": 2, "text": "charlie"},
-        ],
+        _transcript((0, 0, "alpha"), (1, 0, "bravo"), (2, 0, "charlie")),
         max_seconds=45,
         max_characters=11,
     )
@@ -107,20 +109,13 @@ def test_chunk_transcript_splits_by_characters_without_overlap() -> None:
     assert [chunk.first_segment_index for chunk in chunks] == [0, 2]
 
 
-@pytest.mark.parametrize(
-    "segment, error",
-    [
-        ({"start_sec": 0, "text": ""}, "non-empty text"),
-        ({"start_sec": "0", "text": "Hello"}, "numeric start_sec"),
-        ({"start_sec": 0, "duration_sec": "2", "text": "Hello"}, "numeric"),
-    ],
-)
+@pytest.mark.parametrize("args", [(0, 0, ""), (-1, 0, "Hello"), (0, -1, "Hello")])
 def test_chunk_transcript_rejects_invalid_segments(
-    segment: dict[str, Any], error: str
+    args: tuple[float, float, str],
 ) -> None:
     """Invalid source segments should never reach the embedding provider."""
-    with pytest.raises(ValueError, match=error):
-        chunk_transcript([segment])
+    with pytest.raises(ValueError):
+        _transcript(args)
 
 
 def test_gemini_provider_formats_query_and_validates_vector_dimension(
@@ -150,10 +145,7 @@ def test_index_transcript_rebuilds_collection_and_writes_manifest(
     """A successful index stores explicit vectors and a current manifest."""
     store, client, collection = _make_store(tmp_path, mocker)
     provider = FakeEmbeddingProvider()
-    segments = [
-        {"start_sec": 0, "duration_sec": 2.5, "text": "Hello"},
-        {"start_sec": 2.5, "duration_sec": 3, "text": "World"},
-    ]
+    segments = _transcript((0, 2.5, "Hello"), (2.5, 3, "World"))
 
     assert store.index_transcript(segments, "Example video", provider) == 1
     assert provider.documents == [format_document("Hello World", "Example video")]
@@ -187,12 +179,12 @@ def test_needs_indexing_detects_current_and_stale_transcripts(
     """The manifest fingerprint should skip only a matching complete index."""
     store, _, collection = _make_store(tmp_path, mocker)
     provider = FakeEmbeddingProvider()
-    segments = [{"start_sec": 0, "text": "Hello"}]
+    segments = _transcript((0, 0, "Hello"))
 
     store.index_transcript(segments, "Example", provider)
     collection.count.return_value = 1
     assert store.needs_indexing(segments) is False
-    assert store.needs_indexing([{"start_sec": 0, "text": "Changed"}]) is True
+    assert store.needs_indexing(_transcript((0, 0, "Changed"))) is True
 
 
 def test_index_transcript_rejects_provider_with_wrong_configuration(
@@ -204,4 +196,4 @@ def test_index_transcript_rejects_provider_with_wrong_configuration(
     provider.dimension = 4
 
     with pytest.raises(ValueError, match="settings do not match"):
-        store.index_transcript([{"start_sec": 0, "text": "Hello"}], "Example", provider)
+        store.index_transcript(_transcript((0, 0, "Hello")), "Example", provider)

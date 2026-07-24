@@ -15,7 +15,9 @@ from tubetalk.domain.summary import (
     SummaryManifest,
     VideoSummary,
 )
+from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import transcript_sha256
+from tubetalk.domain.video import CachedVideo, VideoMetadata
 from tubetalk.domain.video_status import VideoStatus
 from tubetalk.domain.vision import (
     VISION_SCHEMA_VERSION,
@@ -68,6 +70,30 @@ class LocalCacheManager:
         filepath = self._data_dir / video_id / filename
         return json.loads(filepath.read_text())
 
+    def save_video(self, video: CachedVideo) -> None:
+        """Persist the typed resources required for a reusable video cache."""
+        self.save_json(
+            video.metadata.video_id,
+            "metadata.json",
+            video.metadata.model_dump(mode="json"),
+        )
+        self.save_json(
+            video.metadata.video_id,
+            "transcript.json",
+            video.transcript.model_dump(mode="json")["segments"],
+        )
+
+    def load_video(self, video_id: str) -> CachedVideo:
+        """Load and validate a complete video cache as domain objects."""
+        return CachedVideo(
+            metadata=VideoMetadata.model_validate(
+                self.load_json(video_id, "metadata.json")
+            ),
+            transcript=Transcript.model_validate(
+                {"segments": self.load_json(video_id, "transcript.json")}
+            ),
+        )
+
     def save_summary(self, video_id: str, entry: SummaryCacheEntry) -> None:
         """Persist a generated summary and the inputs used to create it."""
         self.save_json(
@@ -91,7 +117,7 @@ class LocalCacheManager:
     def get_summary_status(
         self,
         video_id: str,
-        transcript: list[dict[str, Any]],
+        transcript: Transcript,
         *,
         model: str,
         prompt_version: str,
@@ -224,15 +250,14 @@ class LocalCacheManager:
         vision_entry = vision_status.entry
 
         transcript_count = 0
-        transcript: list[dict[str, Any]] = []
+        transcript = Transcript(segments=())
         if has_transcript:
             try:
                 loaded_transcript = json.loads(
                     (video_dir / "transcript.json").read_text()
                 )
-                if isinstance(loaded_transcript, list):
-                    transcript = loaded_transcript
-                    transcript_count = len(transcript)
+                transcript = Transcript.model_validate({"segments": loaded_transcript})
+                transcript_count = len(transcript)
             except (json.JSONDecodeError, OSError):
                 pass
 

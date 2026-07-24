@@ -12,6 +12,7 @@ from tubetalk.domain.summary import (
     SummaryManifest,
     VideoSummary,
 )
+from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.domain.transcript_index import transcript_sha256
 from tubetalk.domain.vision import (
     VISION_SCHEMA_VERSION,
@@ -97,7 +98,13 @@ def test_save_json_unicode(tmp_path: Path) -> None:
 # ------------------------------------------------------------------
 
 
-def _summary_entry(transcript: list[dict[str, object]]) -> SummaryCacheEntry:
+def _transcript(text: str = "안녕하세요") -> Transcript:
+    return Transcript(
+        segments=(TranscriptSegment(start_sec=0.0, duration_sec=10.0, text=text),)
+    )
+
+
+def _summary_entry(transcript: Transcript) -> SummaryCacheEntry:
     return SummaryCacheEntry(
         summary=VideoSummary(
             text="영상의 핵심 내용을 설명합니다.",
@@ -120,9 +127,7 @@ def _summary_entry(transcript: list[dict[str, object]]) -> SummaryCacheEntry:
 def test_summary_cache_round_trip_and_current_status(tmp_path: Path) -> None:
     """A summary with matching provenance should be reusable."""
     cache = LocalCacheManager(data_dir=tmp_path)
-    transcript: list[dict[str, object]] = [
-        {"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}
-    ]
+    transcript = _transcript()
     cache.save_summary("vid1", _summary_entry(transcript))
 
     status = cache.get_summary_status(
@@ -141,14 +146,12 @@ def test_summary_cache_round_trip_and_current_status(tmp_path: Path) -> None:
 def test_summary_cache_marks_changed_inputs_stale(tmp_path: Path) -> None:
     """Changing transcript or generation settings must invalidate a summary."""
     cache = LocalCacheManager(data_dir=tmp_path)
-    transcript: list[dict[str, object]] = [
-        {"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}
-    ]
+    transcript = _transcript()
     cache.save_summary("vid1", _summary_entry(transcript))
 
     stale_by_transcript = cache.get_summary_status(
         "vid1",
-        [{"start_sec": 0.0, "duration_sec": 10.0, "text": "변경된 자막"}],
+        _transcript("변경된 자막"),
         model="gemini-3.5-flash-lite",
         prompt_version="summary-chapters-v1",
         language="ko",
@@ -189,7 +192,7 @@ def test_summary_cache_marks_changed_inputs_stale(tmp_path: Path) -> None:
 def test_summary_cache_reports_missing_and_invalid_files(tmp_path: Path) -> None:
     """Missing and malformed summary caches must be distinguished."""
     cache = LocalCacheManager(data_dir=tmp_path)
-    transcript: list[dict[str, object]] = []
+    transcript = Transcript(segments=())
 
     missing = cache.get_summary_status(
         "vid1",
@@ -281,11 +284,13 @@ def test_video_status_includes_current_vision_metadata(tmp_path: Path) -> None:
 def test_video_status_includes_current_summary_metadata(tmp_path: Path) -> None:
     """Status should expose summary freshness and generation provenance."""
     cache = LocalCacheManager(data_dir=tmp_path)
-    transcript: list[dict[str, object]] = [
-        {"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}
-    ]
+    transcript = _transcript()
     cache.save_json("vid1", "metadata.json", {"title": "예시"})
-    cache.save_json("vid1", "transcript.json", transcript)
+    cache.save_json(
+        "vid1",
+        "transcript.json",
+        [{"start_sec": 0.0, "duration_sec": 10.0, "text": "안녕하세요"}],
+    )
     cache.save_summary("vid1", _summary_entry(transcript))
 
     status = cache.get_video_status("vid1")
