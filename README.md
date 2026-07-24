@@ -1,0 +1,150 @@
+# TubeTalk
+
+YouTube 영상의 자막과 시각적 장면을 로컬에 저장하고, Gemini와 ChromaDB로
+요약·타임스탬프 목차·검색용 인덱스를 만드는 Python CLI입니다.
+
+> 현재는 영상 처리, 캐시 상태 확인, 요약 조회까지 사용할 수 있습니다.
+> 자막과 비전 검색을 결합한 대화형 `chat` 명령은 아직 구현 예정입니다.
+
+## 주요 기능
+
+- YouTube URL에서 메타데이터와 한국어/영어 자막 수집
+- 영상별 JSON 캐시 및 ChromaDB 텍스트 벡터 인덱스 생성
+- Gemini 기반 3~5문장 요약과 타임스탬프 목차 생성
+- 공개 YouTube URL을 Gemini로 분석해 시각적 장면 설명과 비전 벡터 인덱스 생성
+- 캐시·텍스트 인덱스·요약·비전 인덱스의 최신 상태 확인
+
+## 요구 사항
+
+- Python 3.12
+- [Poetry](https://python-poetry.org/)
+- Gemini API 키
+
+자막을 제공하지 않거나 접근할 수 없는 영상, 비공개·제한된 영상은 처리하지 못할 수
+있습니다. 비전 분석은 공개 YouTube URL만 지원합니다.
+
+## 설치
+
+```bash
+git clone <repository-url>
+cd tubetalk
+poetry install
+```
+
+프로젝트 루트에 `.env` 파일을 만들고 Gemini API 키를 설정합니다.
+
+```dotenv
+GEMINI_API_KEY=your_api_key
+```
+
+또는 현재 셸 환경 변수로 전달할 수도 있습니다.
+
+```bash
+export GEMINI_API_KEY=your_api_key
+```
+
+## 사용법
+
+### 영상 처리
+
+```bash
+poetry run tubetalk process 'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+처리 시 `data/<video_id>/`에 메타데이터와 자막을 캐시하고, 가능한 경우 다음을
+생성합니다.
+
+- 자막 벡터 인덱스
+- 요약 및 타임스탬프 목차
+- 시각적 장면 설명 및 비전 벡터 인덱스
+
+같은 영상을 다시 처리하면 기존 캐시와 최신 인덱스를 재사용합니다. 개별 Gemini 또는
+인덱싱 단계 실패는 경고로 표시되며, 수집된 자막 캐시는 보존됩니다.
+
+### 캐시 상태 확인
+
+모든 로컬 영상의 상태를 확인합니다.
+
+```bash
+poetry run tubetalk status
+```
+
+특정 영상의 상세 상태를 확인합니다.
+
+```bash
+poetry run tubetalk status VIDEO_ID
+```
+
+### 요약 조회 또는 생성
+
+```bash
+# 캐시된 영상 선택 후 요약 조회
+poetry run tubetalk summary
+
+# 특정 영상 요약 조회
+poetry run tubetalk summary VIDEO_ID
+
+# 요약이 없거나 오래된 경우 새로 생성
+poetry run tubetalk summary VIDEO_ID --generate
+```
+
+전체 명령 목록은 다음으로 확인할 수 있습니다.
+
+```bash
+poetry run tubetalk --help
+```
+
+## 설정
+
+`.env` 또는 환경 변수로 아래 값을 조정할 수 있습니다.
+
+| 환경 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | 없음 | Gemini API 키 |
+| `DATA_DIR` | `./data` | 영상 캐시와 ChromaDB 저장 경로 |
+| `SUMMARY_MODEL` | `gemini-3.5-flash-lite` | 자막 요약 모델 |
+| `VISION_MODEL` | `gemini-3.5-flash` | 영상 장면 분석 모델 |
+| `EMBEDDING_MODEL` | `gemini-embedding-2` | 텍스트/비전 설명 임베딩 모델 |
+| `SUMMARY_LANGUAGE` | `ko` | 요약 및 목차 언어 |
+
+전체 설정값은 [`tubetalk/core/config.py`](tubetalk/core/config.py)에서 확인할 수 있습니다.
+
+## 로컬 데이터 구조
+
+```text
+data/
+└── <video_id>/
+    ├── metadata.json        # 제목, 채널, 길이, 원본 URL 등
+    ├── transcript.json      # 타임스탬프 자막
+    ├── summary.json         # 요약과 타임스탬프 목차
+    ├── vision_index.json    # Gemini가 생성한 시각적 장면 설명
+    └── chromadb/            # 자막·비전 벡터 인덱스
+```
+
+`data/`와 `.env`는 Git에서 제외됩니다.
+
+## 개발 및 검증
+
+```bash
+# 코드 포맷 적용
+poetry run poe format
+
+# 린트
+poetry run poe lint
+
+# 테스트 및 커버리지 검사
+poetry run poe test
+
+# 전체 품질 게이트
+poetry run poe check
+```
+
+품질 게이트는 Ruff 포맷 검사, Ruff 린트, 테스트와 `tubetalk` 기준 90% 이상
+커버리지를 실행합니다.
+
+## 문서
+
+- [제품 요구사항](docs/prd.md)
+- [시스템 설계](docs/design.md)
+- [로드맵](docs/roadmap.md)
+- [개발 프로세스](docs/README.md)
