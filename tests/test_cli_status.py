@@ -137,6 +137,8 @@ def test_process_renders_cache_miss_and_index_result(mocker: Any) -> None:
     result = runner.invoke(app, ["process", "https://youtu.be/dQw4w9WgXcQ"])
 
     assert result.exit_code == 0
+    assert "Processing video data" in result.output
+    assert "Completed in 0.00s" in result.output
     assert "Saved 1 transcript segments" in result.output
     assert "Indexed 1 transcript chunks" in result.output
     assert "영상의 핵심 내용을 요약합니다" in result.output

@@ -1,6 +1,7 @@
 """Gemini adapter for public YouTube URL scene analysis."""
 
 import json
+import math
 from typing import Any, Optional
 
 from google import genai
@@ -38,22 +39,9 @@ class GeminiVisionAnalyzer:
             raise VisionProviderError(
                 "Video duration must be positive for scene coverage"
             )
-        scenes = _parse_response(
-            self._generate(source, _vision_prompt(title, duration_sec))
+        return _parse_response(
+            self._generate(source, _vision_prompt(title, duration_sec)), duration_sec
         )
-        errors = _coverage_errors(scenes, duration_sec)
-        if not errors:
-            return scenes
-        corrected = _parse_response(
-            self._generate(source, _correction_prompt(title, duration_sec, errors))
-        )
-        corrected_errors = _coverage_errors(corrected, duration_sec)
-        if corrected_errors:
-            raise VisionProviderError(
-                "Gemini scene coverage remained incomplete after correction: "
-                + "; ".join(corrected_errors)
-            )
-        return corrected
 
     def _generate(self, source: YouTubeUrlVisionSource, prompt: str) -> Any:
         try:
@@ -77,18 +65,11 @@ def _vision_prompt(title: str, duration_sec: float) -> str:
     return (
         "Analyze this public YouTube video visually. Return chronological scenes "
         f"that cover every moment from 0 through {duration_sec:.3f} seconds. "
-        "Each scene must be no longer than 30 seconds, contiguous with its "
-        "neighbors, and use exact video-supported timestamps. Include visual "
+        "Each scene must satisfy 0 <= start_sec < end_sec <= video duration, be "
+        "no longer than 30 seconds, contiguous with its neighbors, and use exact "
+        "video-supported timestamps. Include visual "
         "objects, people, text, charts, or actions; do not summarize speech unless "
         f"it is visibly shown. Video title: {title}"
-    )
-
-
-def _correction_prompt(title: str, duration_sec: float, errors: list[str]) -> str:
-    return (
-        _vision_prompt(title, duration_sec)
-        + " Return a complete replacement JSON response. Validation errors: "
-        + "; ".join(errors)
     )
 
 
@@ -122,7 +103,7 @@ def _response_schema() -> dict[str, Any]:
     }
 
 
-def _parse_response(response: Any) -> tuple[VisionScene, ...]:
+def _parse_response(response: Any, duration_sec: float) -> tuple[VisionScene, ...]:
     try:
         output_text = response.output_text
         if not isinstance(output_text, str) or not output_text.strip():
@@ -133,12 +114,14 @@ def _parse_response(response: Any) -> tuple[VisionScene, ...]:
         scenes_data = payload["scenes"]
         if not isinstance(scenes_data, list):
             raise ValueError("Scenes must be a list")
-        scenes = tuple(_scene_from_data(item) for item in scenes_data)
-        if any(
-            current.start_sec < previous.start_sec
-            for previous, current in zip(scenes, scenes[1:])
-        ):
-            raise ValueError("Scenes must be ordered by start_sec")
+        scenes = tuple(
+            scene
+            for item in scenes_data
+            if (scene := _scene_from_data(item, duration_sec)) is not None
+        )
+        scenes = tuple(sorted(scenes, key=lambda scene: scene.start_sec))
+        if not scenes:
+            raise ValueError("Gemini returned no usable visual scenes")
         return scenes
     except (
         AttributeError,
@@ -161,36 +144,19 @@ def _response_status(response: Any) -> str:
     return "no status details"
 
 
-def _coverage_errors(scenes: tuple[VisionScene, ...], duration_sec: float) -> list[str]:
-    """Return all coverage violations for the 30-second scene policy."""
-    if not scenes:
-        return ["no scenes returned"]
-    errors: list[str] = []
-    covered_until = 0.0
-    for scene in scenes:
-        if scene.start_sec > covered_until + 0.001:
-            errors.append(f"uncovered {covered_until:.3f}-{scene.start_sec:.3f}")
-        if scene.end_sec - scene.start_sec > 30.001:
-            errors.append(f"scene exceeds 30 seconds at {scene.start_sec:.3f}")
-        if scene.end_sec > duration_sec + 0.001:
-            errors.append(f"scene exceeds video duration at {scene.end_sec:.3f}")
-        covered_until = max(covered_until, scene.end_sec)
-    if covered_until < duration_sec - 0.001:
-        errors.append(f"uncovered {covered_until:.3f}-{duration_sec:.3f}")
-    return errors
-
-
-def _scene_from_data(data: Any) -> VisionScene:
+def _scene_from_data(data: Any, duration_sec: float) -> VisionScene | None:
     if not isinstance(data, dict):
         raise ValueError("Scene must be an object")
-    start_sec = _required_number(data, "start_sec")
-    end_sec = _required_number(data, "end_sec")
+    start_sec = _clamp_timestamp(_required_number(data, "start_sec"), duration_sec)
+    end_sec = _clamp_timestamp(_required_number(data, "end_sec"), duration_sec)
     summary = _required_text(data, "visual_summary")
     objects = data.get("detected_objects")
     if not isinstance(objects, list) or not all(
         isinstance(item, str) for item in objects
     ):
         raise ValueError("detected_objects must be a list of text")
+    if end_sec <= start_sec:
+        return None
     return VisionScene(
         start_sec=start_sec,
         end_sec=end_sec,
@@ -203,7 +169,15 @@ def _required_number(data: dict[str, Any], key: str) -> float:
     value = data.get(key)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{key} must be a number")
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{key} must be finite")
+    return number
+
+
+def _clamp_timestamp(value: float, duration_sec: float) -> float:
+    """Keep usable model timestamps inside the known video range."""
+    return min(max(value, 0.0), duration_sec)
 
 
 def _required_text(data: dict[str, Any], key: str) -> str:

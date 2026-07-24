@@ -1,5 +1,6 @@
 """TubeTalk CLI entry point powered by Typer & Rich."""
 
+from datetime import datetime
 from typing import Optional
 
 import typer
@@ -51,6 +52,7 @@ def status(
 def process(url: str = typer.Argument(..., metavar="YOUTUBE_URL")) -> None:
     """Fetch a video's data, cache it, and synchronise its text index."""
     service = create_video_service()
+    _process_log("Processing video data…")
     try:
         result = service.process(url)
     except InvalidVideoUrlError as error:
@@ -61,17 +63,20 @@ def process(url: str = typer.Argument(..., metavar="YOUTUBE_URL")) -> None:
         raise typer.Exit(code=1) from error
 
     if result.cache_hit:
-        console.print(
-            f"[green]Cache hit for {result.video_id}; using saved data.[/green]"
+        _process_log(
+            f"[green]Cache hit for {result.video_id}; using saved data "
+            f"({_format_duration(result.timing.ingestion_sec)}).[/green]"
         )
     else:
-        console.print(
+        _process_log(
             f"[green]Saved {result.transcript_segments} transcript segments for "
-            f"{result.video_id}.[/green]"
+            f"{result.video_id} "
+            f"({_format_duration(result.timing.ingestion_sec)}).[/green]"
         )
     _show_indexing_result(result)
     _show_process_summary(result)
     _show_process_vision(result)
+    _process_log(f"Completed in {_format_duration(result.timing.total_sec)}.")
     try:
         _show_detail(service.get_status(result.video_id))
     except VideoNotFoundError as error:
@@ -139,13 +144,17 @@ def _select_summary_video(videos: list[VideoStatus]) -> str:
 def _show_indexing_result(result: ProcessResult) -> None:
     """Render the non-fatal transcript indexing outcome."""
     if result.indexing.state == "current":
-        console.print("[dim]Transcript index is current.[/dim]")
+        _process_log(
+            "[dim]Transcript index is current "
+            f"({_format_duration(result.timing.transcript_index_sec)}).[/dim]"
+        )
     elif result.indexing.state == "indexed":
-        console.print(
-            f"[green]Indexed {result.indexing.chunk_count} transcript chunks.[/green]"
+        _process_log(
+            f"[green]Indexed {result.indexing.chunk_count} transcript chunks "
+            f"({_format_duration(result.timing.transcript_index_sec)}).[/green]"
         )
     elif result.indexing.warning:
-        console.print(
+        _process_log(
             "[yellow]Warning: transcript index was not updated: "
             f"{result.indexing.warning}[/yellow]"
         )
@@ -154,32 +163,52 @@ def _show_indexing_result(result: ProcessResult) -> None:
 def _show_process_summary(result: ProcessResult) -> None:
     """Render the summary created or reused by ``process``."""
     if result.summary.warning:
-        console.print(
+        _process_log(
             "[yellow]Warning: summary was not updated: "
             f"{result.summary.warning}[/yellow]"
         )
         return
     if result.summary.summary is not None:
         if result.summary.state == "generated":
-            console.print("[green]Generated transcript summary.[/green]")
+            _process_log(
+                "[green]Generated transcript summary "
+                f"({_format_duration(result.timing.summary_sec)}).[/green]"
+            )
         else:
-            console.print("[dim]Transcript summary is current.[/dim]")
+            _process_log(
+                "[dim]Transcript summary is current "
+                f"({_format_duration(result.timing.summary_sec)}).[/dim]"
+            )
         _show_summary(result.summary.summary)
 
 
 def _show_process_vision(result: ProcessResult) -> None:
     """Render the non-fatal visual-scene indexing outcome."""
     if result.vision.warning:
-        console.print(
+        _process_log(
             "[yellow]Warning: vision index was not updated: "
             f"{result.vision.warning}[/yellow]"
         )
     elif result.vision.state == "generated":
-        console.print(
-            f"[green]Generated {result.vision.scene_count} visual scenes.[/green]"
+        _process_log(
+            f"[green]Generated {result.vision.scene_count} visual scenes "
+            f"({_format_duration(result.timing.vision_sec)}).[/green]"
         )
     elif result.vision.state == "current":
-        console.print("[dim]Vision index is current.[/dim]")
+        _process_log(
+            "[dim]Vision index is current "
+            f"({_format_duration(result.timing.vision_sec)}).[/dim]"
+        )
+
+
+def _process_log(message: str) -> None:
+    """Print a process-progress message with its local wall-clock timestamp."""
+    console.print(f"[dim][{datetime.now().strftime('%H:%M:%S')}][/dim] {message}")
+
+
+def _format_duration(seconds: float) -> str:
+    """Render a compact elapsed duration for process stage status messages."""
+    return f"{seconds:.2f}s"
 
 
 def _show_summary(summary: VideoSummary) -> None:

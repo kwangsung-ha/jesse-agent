@@ -8,7 +8,6 @@ import pytest
 from tubetalk.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
 from tubetalk.infrastructure.visions.gemini import (
     GeminiVisionAnalyzer,
-    _coverage_errors,
 )
 from tubetalk.ports.vision import VisionProviderError
 
@@ -115,29 +114,18 @@ def test_describe_reports_empty_interaction_output_with_status() -> None:
         )
 
 
-def test_describe_retries_once_when_scenes_do_not_cover_duration() -> None:
-    """A sparse first response should be replaced by complete 30-second scenes."""
+def test_describe_keeps_sparse_scenes_without_a_second_api_request() -> None:
+    """Coverage gaps should not spend another request on a correction attempt."""
     client = SimpleNamespace(
         interactions=SimpleNamespace(
             create=Mock(
-                side_effect=[
-                    SimpleNamespace(
-                        output_text=(
-                            '{"scenes":[{"start_sec":0,"end_sec":30,'
-                            '"visual_summary":"A presenter appears.",'
-                            '"detected_objects":[]}]}'
-                        )
-                    ),
-                    SimpleNamespace(
-                        output_text=(
-                            '{"scenes":[{"start_sec":0,"end_sec":30,'
-                            '"visual_summary":"A presenter appears.",'
-                            '"detected_objects":[]},{"start_sec":30,'
-                            '"end_sec":60,"visual_summary":"A chart appears.",'
-                            '"detected_objects":["chart"]}]}'
-                        )
-                    ),
-                ]
+                return_value=SimpleNamespace(
+                    output_text=(
+                        '{"scenes":[{"start_sec":0,"end_sec":30,'
+                        '"visual_summary":"A presenter appears.",'
+                        '"detected_objects":[]}]}'
+                    )
+                )
             )
         )
     )
@@ -149,24 +137,88 @@ def test_describe_retries_once_when_scenes_do_not_cover_duration() -> None:
         duration_sec=60,
     )
 
-    assert len(scenes) == 2
-    assert client.interactions.create.call_count == 2
+    assert len(scenes) == 1
+    assert client.interactions.create.call_count == 1
 
 
-def test_coverage_validation_reports_gaps_long_scenes_and_duration_overflow() -> None:
-    """Coverage checks should identify every reason a scene list is unusable."""
-    errors = _coverage_errors(
-        (
-            VisionScene(5, 40, "A long scene.", ()),
-            VisionScene(45, 70, "An overflow scene.", ()),
-        ),
-        60,
+def test_describe_clamps_timestamps_and_drops_only_non_positive_ranges() -> None:
+    """One malformed timestamp range must not discard the usable scenes."""
+    client = SimpleNamespace(
+        interactions=SimpleNamespace(
+            create=Mock(
+                return_value=SimpleNamespace(
+                    output_text=(
+                        '{"scenes":[{"start_sec":-5,"end_sec":10,'
+                        '"visual_summary":"First.","detected_objects":[]},'
+                        '{"start_sec":50,"end_sec":20,'
+                        '"visual_summary":"Drop.","detected_objects":[]},'
+                        '{"start_sec":20,"end_sec":80,'
+                        '"visual_summary":"Last.","detected_objects":[]}]}'
+                    )
+                )
+            )
+        )
+    )
+    analyzer = GeminiVisionAnalyzer(api_key="key", client=client)
+
+    scenes = analyzer.describe(
+        YouTubeUrlVisionSource("https://youtu.be/abc123"),
+        title="Example",
+        duration_sec=60,
     )
 
-    assert "uncovered 0.000-5.000" in errors
-    assert "scene exceeds 30 seconds at 5.000" in errors
-    assert "scene exceeds video duration at 70.000" in errors
-    assert _coverage_errors((), 60) == ["no scenes returned"]
+    assert [(scene.start_sec, scene.end_sec) for scene in scenes] == [
+        (0.0, 10.0),
+        (20.0, 60.0),
+    ]
+
+
+def test_describe_fails_only_when_every_scene_is_unusable() -> None:
+    """An index cannot be created when normalization removes every scene."""
+    client = SimpleNamespace(
+        interactions=SimpleNamespace(
+            create=Mock(
+                return_value=SimpleNamespace(
+                    output_text=(
+                        '{"scenes":[{"start_sec":30,"end_sec":20,'
+                        '"visual_summary":"Invalid.","detected_objects":[]}]}'
+                    )
+                )
+            )
+        )
+    )
+    analyzer = GeminiVisionAnalyzer(api_key="key", client=client)
+
+    with pytest.raises(VisionProviderError, match="no usable visual scenes"):
+        analyzer.describe(
+            YouTubeUrlVisionSource("https://youtu.be/abc123"),
+            title="Example",
+            duration_sec=60,
+        )
+
+
+def test_describe_rejects_non_finite_timestamps() -> None:
+    """NaN timestamps are not safe to clamp or persist."""
+    client = SimpleNamespace(
+        interactions=SimpleNamespace(
+            create=Mock(
+                return_value=SimpleNamespace(
+                    output_text=(
+                        '{"scenes":[{"start_sec":NaN,"end_sec":10,'
+                        '"visual_summary":"Invalid.","detected_objects":[]}]}'
+                    )
+                )
+            )
+        )
+    )
+    analyzer = GeminiVisionAnalyzer(api_key="key", client=client)
+
+    with pytest.raises(VisionProviderError, match="start_sec must be finite"):
+        analyzer.describe(
+            YouTubeUrlVisionSource("https://youtu.be/abc123"),
+            title="Example",
+            duration_sec=60,
+        )
 
 
 def test_describe_rejects_non_positive_duration() -> None:

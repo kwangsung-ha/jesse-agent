@@ -4,6 +4,7 @@ import json
 import subprocess
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any, Callable, Optional
 
 from youtube_transcript_api._errors import YouTubeTranscriptApiException
@@ -94,6 +95,17 @@ class VisionResult:
 
 
 @dataclass(frozen=True)
+class ProcessTiming:
+    """Wall-clock durations for the independently observable process stages."""
+
+    ingestion_sec: float = 0.0
+    transcript_index_sec: float = 0.0
+    summary_sec: float = 0.0
+    vision_sec: float = 0.0
+    total_sec: float = 0.0
+
+
+@dataclass(frozen=True)
 class ProcessResult:
     """Outcome of processing a video URL into the local cache."""
 
@@ -103,6 +115,7 @@ class ProcessResult:
     indexing: IndexingResult
     summary: SummaryResult
     vision: VisionResult = field(default_factory=lambda: VisionResult(state="missing"))
+    timing: ProcessTiming = field(default_factory=ProcessTiming)
 
 
 class VideoService:
@@ -139,22 +152,42 @@ class VideoService:
 
     def process(self, url: str) -> ProcessResult:
         """Fetch or reuse a video cache, then bring its index up to date."""
+        total_started = perf_counter()
         try:
             video_id = self._loader.extract_video_id(url)
         except ValueError as error:
             raise InvalidVideoUrlError(str(error)) from error
 
         if self._cache.has_cache(video_id):
+            ingestion_started = perf_counter()
             metadata, transcript = self._load_cached_resources(video_id)
+            ingestion_sec = perf_counter() - ingestion_started
+            indexing_started = perf_counter()
+            indexing = self._sync_transcript_index(video_id, metadata, transcript)
+            transcript_index_sec = perf_counter() - indexing_started
+            summary_started = perf_counter()
+            summary = self._sync_summary(video_id, metadata, transcript)
+            summary_sec = perf_counter() - summary_started
+            vision_started = perf_counter()
+            vision = self._sync_vision_index(video_id, metadata)
+            vision_sec = perf_counter() - vision_started
             return ProcessResult(
                 video_id=video_id,
                 cache_hit=True,
                 transcript_segments=len(transcript),
-                indexing=self._sync_transcript_index(video_id, metadata, transcript),
-                summary=self._sync_summary(video_id, metadata, transcript),
-                vision=self._sync_vision_index(video_id, metadata),
+                indexing=indexing,
+                summary=summary,
+                vision=vision,
+                timing=ProcessTiming(
+                    ingestion_sec=ingestion_sec,
+                    transcript_index_sec=transcript_index_sec,
+                    summary_sec=summary_sec,
+                    vision_sec=vision_sec,
+                    total_sec=perf_counter() - total_started,
+                ),
             )
 
+        ingestion_started = perf_counter()
         try:
             metadata = self._loader.fetch_metadata(url)
             transcript = self._loader.fetch_transcript(video_id)
@@ -177,13 +210,30 @@ class VideoService:
         )
         self._cache.save_json(video_id, "metadata.json", metadata)
         self._cache.save_json(video_id, "transcript.json", transcript)
+        ingestion_sec = perf_counter() - ingestion_started
+        indexing_started = perf_counter()
+        indexing = self._sync_transcript_index(video_id, metadata, transcript)
+        transcript_index_sec = perf_counter() - indexing_started
+        summary_started = perf_counter()
+        summary = self._sync_summary(video_id, metadata, transcript)
+        summary_sec = perf_counter() - summary_started
+        vision_started = perf_counter()
+        vision = self._sync_vision_index(video_id, metadata)
+        vision_sec = perf_counter() - vision_started
         return ProcessResult(
             video_id=video_id,
             cache_hit=False,
             transcript_segments=len(transcript),
-            indexing=self._sync_transcript_index(video_id, metadata, transcript),
-            summary=self._sync_summary(video_id, metadata, transcript),
-            vision=self._sync_vision_index(video_id, metadata),
+            indexing=indexing,
+            summary=summary,
+            vision=vision,
+            timing=ProcessTiming(
+                ingestion_sec=ingestion_sec,
+                transcript_index_sec=transcript_index_sec,
+                summary_sec=summary_sec,
+                vision_sec=vision_sec,
+                total_sec=perf_counter() - total_started,
+            ),
         )
 
     def list_statuses(self) -> list[VideoStatus]:

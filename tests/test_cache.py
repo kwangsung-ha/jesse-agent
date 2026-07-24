@@ -175,12 +175,15 @@ def test_summary_cache_marks_changed_inputs_stale(tmp_path: Path) -> None:
         language="en",
     )
 
-    assert [
-        stale_by_transcript.state,
-        stale_by_model.state,
-        stale_by_prompt.state,
-        stale_by_language.state,
-    ] == ["stale", "stale", "stale", "stale"]
+    assert all(
+        x == "stale"
+        for x in [
+            stale_by_transcript.state,
+            stale_by_model.state,
+            stale_by_prompt.state,
+            stale_by_language.state,
+        ]
+    )
 
 
 def test_summary_cache_reports_missing_and_invalid_files(tmp_path: Path) -> None:

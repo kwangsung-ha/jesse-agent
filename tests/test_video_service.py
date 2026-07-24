@@ -97,6 +97,11 @@ def test_process_cache_miss_saves_resources_and_indexes(
     assert result.vision.state == "generated"
     assert result.vision.scene_count == 1
     assert result.vision.indexing.state == "indexed"
+    assert result.timing.ingestion_sec >= 0
+    assert result.timing.transcript_index_sec >= 0
+    assert result.timing.summary_sec >= 0
+    assert result.timing.vision_sec >= 0
+    assert result.timing.total_sec >= 0
 
 
 def test_process_reuses_current_vision_index_without_provider_call(
