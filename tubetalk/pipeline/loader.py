@@ -6,6 +6,10 @@ import subprocess
 from typing import Any, Optional
 
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import YouTubeTranscriptApiException
+
+from tubetalk.domain.transcript import Transcript, TranscriptSegment
+from tubetalk.domain.video import VideoMetadata
 
 # ------------------------------------------------------------------
 # URL → video_id extraction
@@ -16,6 +20,14 @@ _YOUTUBE_RE = re.compile(
     r"|youtu\.be/)"
     r"(?P<id>[A-Za-z0-9_-]{11})"
 )
+
+
+class VideoLoaderError(Exception):
+    """Raised when a YouTube adapter cannot collect video resources."""
+
+
+class InvalidVideoUrlError(VideoLoaderError, ValueError):
+    """Raised when a URL does not identify a supported YouTube video."""
 
 
 class YouTubeLoader:
@@ -30,7 +42,7 @@ class YouTubeLoader:
         """
         match = _YOUTUBE_RE.search(url)
         if not match:
-            raise ValueError(f"Cannot extract video_id from URL: {url}")
+            raise InvalidVideoUrlError(f"Cannot extract video_id from URL: {url}")
         return match.group("id")
 
     # ------------------------------------------------------------------
@@ -41,57 +53,88 @@ class YouTubeLoader:
     def fetch_transcript(
         video_id: str,
         languages: Optional[list[str]] = None,
-    ) -> list[dict[str, Any]]:
+    ) -> Transcript:
         """Fetch transcript segments via ``youtube-transcript-api``.
 
-        Returns a list of dicts with keys:
-        ``start_sec``, ``duration_sec``, ``text``.
+        Returns validated, chronologically ordered transcript segments.
         """
         if languages is None:
             languages = ["ko", "en"]
 
-        ytt_api = YouTubeTranscriptApi()
-        transcript = ytt_api.fetch(video_id, languages=languages)
-
-        return [
-            {
-                "start_sec": round(seg.start, 3),
-                "duration_sec": round(seg.duration, 3),
-                "text": seg.text,
-            }
-            for seg in transcript
-        ]
+        try:
+            ytt_api = YouTubeTranscriptApi()
+            transcript = ytt_api.fetch(video_id, languages=languages)
+            return Transcript(
+                segments=tuple(
+                    TranscriptSegment(
+                        start_sec=round(seg.start, 3),
+                        duration_sec=round(seg.duration, 3),
+                        text=seg.text,
+                    )
+                    for seg in transcript
+                )
+            )
+        except (YouTubeTranscriptApiException, ValueError) as error:
+            raise VideoLoaderError(
+                f"Failed to fetch transcript for {video_id}: {error}"
+            ) from error
 
     # ------------------------------------------------------------------
     # Metadata (via yt-dlp)
     # ------------------------------------------------------------------
 
     @staticmethod
-    def fetch_metadata(url: str) -> dict[str, Any]:
+    def fetch_metadata(video_id: str, url: str) -> VideoMetadata:
         """Fetch video metadata using ``yt-dlp --dump-json``.
 
-        Returns a dict with keys:
-        ``title``, ``channel``, ``duration``, ``upload_date``,
-        ``view_count``, ``thumbnail``.
+        Returns validated metadata for the requested video.
         """
-        result = subprocess.run(
-            [
-                "yt-dlp",
-                "--dump-json",
-                "--no-download",
-                "--no-warnings",
-                url,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        info: dict[str, Any] = json.loads(result.stdout)
-        return {
-            "title": info.get("title"),
-            "channel": info.get("channel"),
-            "duration": info.get("duration"),
-            "upload_date": info.get("upload_date"),
-            "view_count": info.get("view_count"),
-            "thumbnail": info.get("thumbnail"),
-        }
+        try:
+            result = subprocess.run(
+                [
+                    "yt-dlp",
+                    "--dump-json",
+                    "--no-download",
+                    "--no-warnings",
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            info: dict[str, Any] = json.loads(result.stdout)
+            return VideoMetadata(
+                video_id=video_id,
+                source_url=url,
+                title=_optional_text(info.get("title")),
+                channel=_optional_text(info.get("channel")),
+                duration_sec=_optional_number(info.get("duration")),
+                upload_date=_optional_text(info.get("upload_date")),
+                view_count=_optional_int(info.get("view_count")),
+                thumbnail_url=_optional_text(info.get("thumbnail")),
+            )
+        except (
+            json.JSONDecodeError,
+            OSError,
+            subprocess.CalledProcessError,
+            ValueError,
+        ) as error:
+            raise VideoLoaderError(
+                f"Failed to fetch metadata for {video_id}: {error}"
+            ) from error
+
+
+def _optional_text(value: Any) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _optional_number(value: Any) -> float | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return float(value)
+
+
+def _optional_int(value: Any) -> int | None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    return value

@@ -1,6 +1,5 @@
 """Unit tests for interface-independent video application services."""
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -14,16 +13,25 @@ from tubetalk.domain.summary import (
     SummaryManifest,
     VideoSummary,
 )
+from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.domain.transcript_index import transcript_sha256
+from tubetalk.domain.video import CachedVideo, VideoMetadata
 from tubetalk.domain.vision import (
     VISION_SCHEMA_VERSION,
     VisionIndexEntry,
     VisionManifest,
     VisionScene,
 )
+from tubetalk.pipeline.loader import (
+    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
+)
+from tubetalk.pipeline.loader import (
+    VideoLoaderError,
+)
 from tubetalk.ports.summary import SummaryProviderError
 from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
 from tubetalk.ports.vision import VisionProviderError
+from tubetalk.services.stages import VisionIndexingStage
 from tubetalk.services.video_service import (
     InvalidVideoUrlError,
     SummaryGenerationError,
@@ -69,6 +77,33 @@ def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any, 
     return service, loader, store, provider_factory, summary_provider_factory
 
 
+def _metadata(video_id: str, *, duration: float | None = 5) -> VideoMetadata:
+    return VideoMetadata(
+        video_id=video_id,
+        source_url=f"https://youtu.be/{video_id}",
+        title="Example",
+        duration_sec=duration,
+    )
+
+
+def _transcript(text: str = "Hello") -> Transcript:
+    return Transcript(
+        segments=(TranscriptSegment(start_sec=0, duration_sec=0, text=text),)
+    )
+
+
+def _save_video(
+    cache: LocalCacheManager, video_id: str, *, duration: float | None = 5
+) -> Transcript:
+    transcript = _transcript()
+    cache.save_video(
+        CachedVideo(
+            metadata=_metadata(video_id, duration=duration), transcript=transcript
+        )
+    )
+    return transcript
+
+
 def test_process_cache_miss_saves_resources_and_indexes(
     tmp_path: Path, mocker: Any
 ) -> None:
@@ -77,8 +112,8 @@ def test_process_cache_miss_saves_resources_and_indexes(
         tmp_path, mocker
     )
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example", "duration": 5}
-    loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
+    loader.fetch_metadata.return_value = _metadata("dQw4w9WgXcQ")
+    loader.fetch_transcript.return_value = _transcript()
     store.needs_indexing.return_value = True
     store.index_transcript.return_value = 1
 
@@ -89,7 +124,9 @@ def test_process_cache_miss_saves_resources_and_indexes(
     assert result.indexing.state == "indexed"
     assert result.indexing.chunk_count == 1
     assert (tmp_path / "dQw4w9WgXcQ" / "metadata.json").is_file()
-    loader.fetch_metadata.assert_called_once_with("https://youtu.be/dQw4w9WgXcQ")
+    loader.fetch_metadata.assert_called_once_with(
+        "dQw4w9WgXcQ", "https://youtu.be/dQw4w9WgXcQ"
+    )
     loader.fetch_transcript.assert_called_once_with("dQw4w9WgXcQ")
     assert provider_factory.call_count == 2
     summary_provider_factory.assert_called_once_with()
@@ -110,18 +147,7 @@ def test_process_reuses_current_vision_index_without_provider_call(
     """A current visual index should not trigger a second Gemini request."""
     service, loader, store, _, _ = _service(tmp_path, mocker)
     cache = LocalCacheManager(data_dir=tmp_path)
-    cache.save_json(
-        "dQw4w9WgXcQ",
-        "metadata.json",
-        {
-            "title": "Example",
-            "source_url": "https://youtu.be/dQw4w9WgXcQ",
-            "duration": 5,
-        },
-    )
-    cache.save_json(
-        "dQw4w9WgXcQ", "transcript.json", [{"start_sec": 0, "text": "Hello"}]
-    )
+    _save_video(cache, "dQw4w9WgXcQ")
     cache.save_vision_index(
         "dQw4w9WgXcQ",
         VisionIndexEntry(
@@ -144,14 +170,45 @@ def test_process_reuses_current_vision_index_without_provider_call(
     service._vision_analyzer_factory.assert_not_called()
 
 
+def test_vision_stage_owns_scene_and_vector_index_synchronisation(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """The vision collaborator can be exercised without the service facade."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    analyzer = mocker.Mock()
+    analyzer.describe.return_value = (
+        VisionScene(0, 5, "A presenter appears.", ("presenter",)),
+    )
+    repository = mocker.Mock()
+    repository.needs_indexing.return_value = True
+    repository.index_scenes.return_value = 1
+    provider_factory = mocker.Mock(return_value=mocker.Mock())
+    stage = VisionIndexingStage(
+        cache,
+        mocker.Mock(return_value=analyzer),
+        mocker.Mock(return_value=repository),
+        provider_factory,
+        model="gemini-3.5-flash",
+        prompt_version="vision-scenes-v2-30s",
+    )
+
+    result = stage.sync("video123", _metadata("video123"))
+
+    assert result.state == "generated"
+    assert result.scene_count == 1
+    assert result.indexing.state == "indexed"
+    analyzer.describe.assert_called_once()
+    repository.index_scenes.assert_called_once()
+
+
 def test_process_keeps_text_cache_when_vision_generation_fails(
     tmp_path: Path, mocker: Any
 ) -> None:
     """Vision-provider errors must not discard transcript or summary resources."""
     service, loader, store, _, _ = _service(tmp_path, mocker)
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example", "duration": 5}
-    loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
+    loader.fetch_metadata.return_value = _metadata("dQw4w9WgXcQ")
+    loader.fetch_transcript.return_value = _transcript()
     store.needs_indexing.return_value = False
     service._vision_analyzer_factory.return_value.describe.side_effect = (
         VisionProviderError("video is unavailable")
@@ -172,10 +229,7 @@ def test_process_cache_hit_skips_remote_loading_and_keeps_current_index(
         tmp_path, mocker
     )
     cache = LocalCacheManager(data_dir=tmp_path)
-    cache.save_json("dQw4w9WgXcQ", "metadata.json", {"title": "Example"})
-    cache.save_json(
-        "dQw4w9WgXcQ", "transcript.json", [{"start_sec": 0, "text": "Hello"}]
-    )
+    _save_video(cache, "dQw4w9WgXcQ", duration=None)
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
     store.needs_indexing.return_value = False
 
@@ -197,9 +251,7 @@ def test_process_reuses_current_summary_without_provider_call(
     """A current summary manifest avoids another Gemini request."""
     service, loader, store, _, summary_provider_factory = _service(tmp_path, mocker)
     cache = LocalCacheManager(data_dir=tmp_path)
-    transcript = [{"start_sec": 0, "text": "Hello"}]
-    cache.save_json("dQw4w9WgXcQ", "metadata.json", {"title": "Example"})
-    cache.save_json("dQw4w9WgXcQ", "transcript.json", transcript)
+    transcript = _save_video(cache, "dQw4w9WgXcQ", duration=None)
     cached_summary = VideoSummary(
         text="캐시된 요약입니다.", chapters=(Chapter(start_sec=0, title="소개"),)
     )
@@ -233,8 +285,8 @@ def test_process_keeps_cache_when_summary_generation_fails(
     """Summary failures are warnings and leave the collected cache intact."""
     service, loader, store, _, summary_provider_factory = _service(tmp_path, mocker)
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example"}
-    loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
+    loader.fetch_metadata.return_value = _metadata("dQw4w9WgXcQ")
+    loader.fetch_transcript.return_value = _transcript()
     store.needs_indexing.return_value = False
     summary_provider_factory.side_effect = SummaryProviderError("Gemini unavailable")
 
@@ -252,8 +304,7 @@ def test_get_summary_requires_generate_for_missing_cache(
     """The summary use case does not call Gemini without explicit permission."""
     service, _, _, _, summary_provider_factory = _service(tmp_path, mocker)
     cache = LocalCacheManager(data_dir=tmp_path)
-    cache.save_json("video123", "metadata.json", {"title": "Example"})
-    cache.save_json("video123", "transcript.json", [{"start_sec": 0, "text": "Hi"}])
+    _save_video(cache, "video123")
 
     with pytest.raises(SummaryUnavailableError, match="--generate"):
         service.get_summary("video123")
@@ -271,8 +322,7 @@ def test_get_summary_maps_generation_warning_to_service_error(
     """Explicit generation exposes provider failures to the CLI."""
     service, _, _, _, summary_provider_factory = _service(tmp_path, mocker)
     cache = LocalCacheManager(data_dir=tmp_path)
-    cache.save_json("video123", "metadata.json", {"title": "Example"})
-    cache.save_json("video123", "transcript.json", [{"start_sec": 0, "text": "Hi"}])
+    _save_video(cache, "video123")
     summary_provider_factory.side_effect = SummaryProviderError("Gemini unavailable")
 
     with pytest.raises(SummaryGenerationError, match="Gemini unavailable"):
@@ -283,8 +333,8 @@ def test_process_keeps_cache_when_indexing_fails(tmp_path: Path, mocker: Any) ->
     """Embedding failures are returned as warnings after JSON is persisted."""
     service, loader, store, provider_factory, _ = _service(tmp_path, mocker)
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example"}
-    loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
+    loader.fetch_metadata.return_value = _metadata("dQw4w9WgXcQ")
+    loader.fetch_transcript.return_value = _transcript()
     store.needs_indexing.return_value = True
     provider_factory.side_effect = ValueError("GEMINI_API_KEY is required")
 
@@ -300,16 +350,16 @@ def test_process_raises_service_errors_for_invalid_url_and_ingestion(
 ) -> None:
     """Interfaces receive stable error types instead of loader exceptions."""
     service, loader, _, _, _ = _service(tmp_path, mocker)
-    loader.extract_video_id.side_effect = ValueError("Cannot extract video_id")
+    loader.extract_video_id.side_effect = LoaderInvalidVideoUrlError(
+        "Cannot extract video_id"
+    )
 
     with pytest.raises(InvalidVideoUrlError, match="Cannot extract video_id"):
         service.process("https://example.com/video")
 
     loader.extract_video_id.side_effect = None
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.side_effect = subprocess.CalledProcessError(
-        1, "yt-dlp", stderr="yt-dlp failed"
-    )
+    loader.fetch_metadata.side_effect = VideoLoaderError("yt-dlp failed")
     with pytest.raises(VideoIngestionError, match="Failed to process"):
         service.process("https://youtu.be/dQw4w9WgXcQ")
 
@@ -320,8 +370,8 @@ def test_process_does_not_hide_unexpected_indexing_errors(
     """Programming errors must not be incorrectly reported as API warnings."""
     service, loader, store, _, _ = _service(tmp_path, mocker)
     loader.extract_video_id.return_value = "dQw4w9WgXcQ"
-    loader.fetch_metadata.return_value = {"title": "Example"}
-    loader.fetch_transcript.return_value = [{"start_sec": 0, "text": "Hello"}]
+    loader.fetch_metadata.return_value = _metadata("dQw4w9WgXcQ")
+    loader.fetch_transcript.return_value = _transcript()
     store.needs_indexing.side_effect = RuntimeError("unexpected bug")
 
     with pytest.raises(RuntimeError, match="unexpected bug"):
@@ -334,12 +384,7 @@ def test_statuses_are_typed_and_missing_video_raises(
     """Status data is reusable without CLI table formatting."""
     service, _, _, _, _ = _service(tmp_path, mocker)
     cache = LocalCacheManager(data_dir=tmp_path)
-    cache.save_json(
-        "video123",
-        "metadata.json",
-        {"title": "Example", "channel": "Channel", "duration": 45},
-    )
-    cache.save_json("video123", "transcript.json", [{"start_sec": 0, "text": "Hi"}])
+    _save_video(cache, "video123", duration=45)
 
     statuses = service.list_statuses()
     status = service.get_status("video123")

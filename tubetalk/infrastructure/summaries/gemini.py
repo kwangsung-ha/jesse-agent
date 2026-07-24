@@ -8,8 +8,8 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from tubetalk.core.config import settings
 from tubetalk.domain.summary import Chapter, VideoSummary
+from tubetalk.domain.transcript import Transcript
 from tubetalk.ports.summary import SummaryProviderError
 
 
@@ -19,7 +19,7 @@ class GeminiSummaryProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = settings.summary_model,
+        model: str = "gemini-3.5-flash-lite",
         client: Optional[Any] = None,
     ) -> None:
         """Create a summary provider using the configured Gemini model."""
@@ -30,7 +30,7 @@ class GeminiSummaryProvider:
 
     def generate_summary(
         self,
-        transcript: list[dict[str, Any]],
+        transcript: Transcript,
         *,
         title: str,
         language: str,
@@ -85,34 +85,18 @@ class GeminiSummaryProvider:
 
 
 def _summary_prompt(
-    transcript: list[dict[str, Any]], title: str, language: str
+    transcript: Transcript, title: str, language: str
 ) -> tuple[str, float]:
     """Build the grounded prompt and find the final valid transcript timestamp."""
     if not transcript:
         raise SummaryProviderError("Cannot summarize an empty transcript")
     lines: list[str] = []
     last_timestamp = 0.0
-    for segment in transcript:
-        if not isinstance(segment, dict):
-            raise SummaryProviderError("Transcript segments must be objects")
-        text = segment.get("text")
-        start_sec = segment.get("start_sec")
-        duration_sec = segment.get("duration_sec", 0.0)
-        if (
-            not isinstance(text, str)
-            or not text.strip()
-            or not isinstance(start_sec, (int, float))
-            or isinstance(start_sec, bool)
-            or not isinstance(duration_sec, (int, float))
-            or isinstance(duration_sec, bool)
-        ):
-            raise SummaryProviderError("Transcript segments have an invalid format")
-        start = float(start_sec)
-        end = start + float(duration_sec)
-        if start < 0 or end < start:
-            raise SummaryProviderError("Transcript timestamps must be non-negative")
+    for segment in transcript.segments:
+        start = segment.start_sec
+        end = segment.end_sec
         last_timestamp = max(last_timestamp, end)
-        lines.append(f"[{_timestamp(start)}] {text.strip()}")
+        lines.append(f"[{_timestamp(start)}] {segment.text.strip()}")
     prompt = (
         "Summarize the following YouTube transcript. Use only facts supported by "
         "the transcript. Return JSON with a 3-5 sentence `summary` and a "

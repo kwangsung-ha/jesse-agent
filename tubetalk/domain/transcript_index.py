@@ -3,12 +3,29 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from datetime import datetime
+from typing import Optional
 
-from tubetalk.core.config import settings
+from pydantic import BaseModel, ConfigDict, Field
+
+from tubetalk.domain.transcript import Transcript
 
 INDEX_SCHEMA_VERSION = 1
 CHUNK_POLICY_VERSION = "45s-1200chars-v1"
+
+
+class TranscriptChunkPolicy(BaseModel):
+    """Application-supplied limits for retrieval-sized transcript chunks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    max_seconds: float = Field(gt=0)
+    max_characters: int = Field(gt=0)
+
+
+DEFAULT_TRANSCRIPT_CHUNK_POLICY = TranscriptChunkPolicy(
+    max_seconds=45.0, max_characters=1200
+)
 
 
 @dataclass(frozen=True)
@@ -33,17 +50,21 @@ class IndexManifest:
     embedding_dimension: int
     chunk_policy_version: str
     chunk_count: int
-    indexed_at: str
+    indexed_at: datetime
+    collection_name: str = "transcript_collection"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.indexed_at, str):
+            object.__setattr__(
+                self, "indexed_at", datetime.fromisoformat(self.indexed_at)
+            )
 
 
 def chunk_transcript(
-    segments: list[dict[str, Any]],
-    max_seconds: float = settings.transcript_chunk_max_seconds,
-    max_characters: int = settings.transcript_chunk_max_characters,
+    transcript: Transcript,
+    policy: TranscriptChunkPolicy = DEFAULT_TRANSCRIPT_CHUNK_POLICY,
 ) -> list[TranscriptChunk]:
     """Merge consecutive transcript segments into bounded retrieval chunks."""
-    if max_seconds <= 0 or max_characters <= 0:
-        raise ValueError("Transcript chunk limits must be positive")
     chunks: list[TranscriptChunk] = []
     chunk_texts: list[str] = []
     chunk_start: Optional[float] = None
@@ -65,8 +86,12 @@ def chunk_transcript(
             )
         )
 
-    for segment_index, segment in enumerate(segments):
-        text, start_sec, end_sec = _validate_segment(segment)
+    for segment_index, segment in enumerate(transcript.segments):
+        text, start_sec, end_sec = (
+            segment.text.strip(),
+            segment.start_sec,
+            segment.end_sec,
+        )
         if previous_start is not None and start_sec < previous_start:
             raise ValueError("Transcript segments must be ordered by start_sec")
         previous_start = start_sec
@@ -75,7 +100,8 @@ def chunk_transcript(
             chunk_start if chunk_start is not None else start_sec
         )
         if chunk_texts and (
-            candidate_characters > max_characters or candidate_duration > max_seconds
+            candidate_characters > policy.max_characters
+            or candidate_duration > policy.max_seconds
         ):
             emit(segment_index - 1)
             chunk_texts = []
@@ -88,7 +114,7 @@ def chunk_transcript(
         chunk_texts.append(text)
         chunk_end = end_sec
     if chunk_texts:
-        emit(len(segments) - 1)
+        emit(len(transcript) - 1)
     return chunks
 
 
@@ -97,22 +123,19 @@ def format_document(text: str, title: str) -> str:
     return f"title: {title} | text: {text}"
 
 
-def transcript_sha256(segments: list[dict[str, Any]]) -> str:
+def transcript_sha256(transcript: Transcript) -> str:
     """Return a stable digest used to detect transcript changes."""
     serialized = json.dumps(
-        segments, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        [
+            {
+                "start_sec": segment.start_sec,
+                "duration_sec": segment.duration_sec,
+                "text": segment.text,
+            }
+            for segment in transcript.segments
+        ],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
     )
     return hashlib.sha256(serialized.encode()).hexdigest()
-
-
-def _validate_segment(segment: dict[str, Any]) -> tuple[str, float, float]:
-    text = segment.get("text")
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError("Each transcript segment requires non-empty text")
-    start_sec = segment.get("start_sec")
-    if not isinstance(start_sec, (int, float)):
-        raise ValueError("Each transcript segment requires numeric start_sec")
-    duration_sec = segment.get("duration_sec", 0.0)
-    if not isinstance(duration_sec, (int, float)):
-        raise ValueError("duration_sec must be numeric when provided")
-    return text.strip(), float(start_sec), float(start_sec + duration_sec)

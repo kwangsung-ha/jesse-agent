@@ -2,8 +2,10 @@
 
 from abc import abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional, Protocol
 
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
 from tubetalk.ports.embedding import EmbeddingProvider
 
@@ -16,11 +18,11 @@ class VisionIndexRepositoryError(Exception):
 class VisionVectorIndexStatus:
     """Repository-owned status data for a visual-scene vector index."""
 
-    state: str
+    state: CacheState
     scene_count: Optional[int] = None
     embedding_model: Optional[str] = None
     embedding_dimension: Optional[int] = None
-    indexed_at: Optional[str] = None
+    indexed_at: Optional[datetime] = None
 
 
 class VisionIndexRepository(Protocol):

@@ -7,8 +7,8 @@ from typer.testing import CliRunner
 
 from tubetalk.cli.main import _format_vision_state, _format_vision_summary, app
 from tubetalk.domain.summary import Chapter, VideoSummary
+from tubetalk.services.results import IndexingResult
 from tubetalk.services.video_service import (
-    IndexingResult,
     InvalidVideoUrlError,
     ProcessResult,
     SummaryGenerationError,

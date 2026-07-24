@@ -7,7 +7,6 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from tubetalk.core.config import settings
 from tubetalk.ports.embedding import EmbeddingProviderError
 
 
@@ -17,8 +16,8 @@ class GeminiEmbeddingProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = settings.embedding_model,
-        dimension: int = settings.embedding_dimension,
+        model: str = "gemini-embedding-2",
+        dimension: int = 768,
         client: Optional[Any] = None,
     ) -> None:
         """Create a provider using the supplied Gemini API key."""
@@ -50,7 +49,10 @@ class GeminiEmbeddingProvider:
         embeddings = response.embeddings
         if not embeddings or len(embeddings) != 1:
             raise ValueError("Gemini embedding response must contain one embedding")
-        values = list(embeddings[0].values)
+        raw_values = embeddings[0].values
+        if not isinstance(raw_values, list):
+            raise ValueError("Gemini embedding response must contain vector values")
+        values = [float(value) for value in raw_values]
         if len(values) != self.dimension:
             raise ValueError(
                 f"Gemini embedding dimension {len(values)} does not match "

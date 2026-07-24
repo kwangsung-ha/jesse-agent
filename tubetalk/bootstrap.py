@@ -2,8 +2,9 @@
 
 from collections.abc import Callable
 
-from tubetalk.core.cache import LocalCacheManager
+from tubetalk.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from tubetalk.core.config import Settings, settings
+from tubetalk.domain.transcript_index import TranscriptChunkPolicy
 from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
 from tubetalk.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
@@ -25,7 +26,18 @@ from tubetalk.services.video_service import VideoService
 def create_video_service(config: Settings = settings) -> VideoService:
     """Build the production service using the configured infrastructure."""
     return VideoService(
-        cache=LocalCacheManager(data_dir=config.data_dir),
+        cache=LocalCacheManager(
+            data_dir=config.data_dir,
+            freshness_policy=CacheFreshnessPolicy(
+                summary_model=config.summary_model,
+                summary_prompt_version=config.summary_prompt_version,
+                summary_language=config.summary_language,
+                vision_model=config.vision_model,
+                vision_prompt_version=config.vision_prompt_version,
+                embedding_model=config.embedding_model,
+                embedding_dimension=config.embedding_dimension,
+            ),
+        ),
         loader=YouTubeLoader(),
         embedding_provider_factory=_embedding_provider_factory(config),
         transcript_index_repository_factory=_repository_factory(config),
@@ -62,6 +74,10 @@ def _repository_factory(
                 data_dir=config.data_dir,
                 embedding_model=config.embedding_model,
                 embedding_dimension=config.embedding_dimension,
+                chunk_policy=TranscriptChunkPolicy(
+                    max_seconds=config.transcript_chunk_max_seconds,
+                    max_characters=config.transcript_chunk_max_characters,
+                ),
             )
 
 

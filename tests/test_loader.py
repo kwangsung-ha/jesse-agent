@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tubetalk.pipeline.loader import YouTubeLoader
+from tubetalk.pipeline.loader import VideoLoaderError, YouTubeLoader
 
 # ------------------------------------------------------------------
 # extract_video_id
@@ -76,7 +76,7 @@ class TestFetchTranscript:
     """Tests for YouTubeLoader.fetch_transcript."""
 
     def test_returns_formatted_segments(self, mocker: Any) -> None:
-        """fetch_transcript should return dicts with start_sec/duration_sec/text."""
+        """fetch_transcript should return validated transcript segments."""
         mock_api = MagicMock()
         mock_api.fetch.return_value = _make_transcript_segments()
         mocker.patch(
@@ -87,12 +87,10 @@ class TestFetchTranscript:
         result = YouTubeLoader.fetch_transcript("abc123")
 
         assert len(result) == 3
-        assert result[0] == {
-            "start_sec": 0.0,
-            "duration_sec": 3.5,
-            "text": "Hello world",
-        }
-        assert result[1]["text"] == "안녕하세요"
+        assert result.segments[0].start_sec == 0.0
+        assert result.segments[0].duration_sec == 3.5
+        assert result.segments[0].text == "Hello world"
+        assert result.segments[1].text == "안녕하세요"
         mock_api.fetch.assert_called_once_with("abc123", languages=["ko", "en"])
 
     def test_custom_languages(self, mocker: Any) -> None:
@@ -106,6 +104,17 @@ class TestFetchTranscript:
 
         YouTubeLoader.fetch_transcript("abc123", languages=["ja"])
         mock_api.fetch.assert_called_once_with("abc123", languages=["ja"])
+
+    def test_converts_provider_error(self, mocker: Any) -> None:
+        """External transcript errors must not leak past the loader boundary."""
+        mock_api = MagicMock()
+        mock_api.fetch.side_effect = ValueError("transcript unavailable")
+        mocker.patch(
+            "tubetalk.pipeline.loader.YouTubeTranscriptApi", return_value=mock_api
+        )
+
+        with pytest.raises(VideoLoaderError, match="Failed to fetch transcript"):
+            YouTubeLoader.fetch_transcript("abc123")
 
 
 # ------------------------------------------------------------------
@@ -127,7 +136,7 @@ class TestFetchMetadata:
     """Tests for YouTubeLoader.fetch_metadata."""
 
     def test_returns_expected_keys(self, mocker: Any) -> None:
-        """fetch_metadata should return only the specified metadata keys."""
+        """fetch_metadata should return typed metadata."""
         mocker.patch(
             "tubetalk.pipeline.loader.subprocess.run",
             return_value=subprocess.CompletedProcess(
@@ -138,15 +147,17 @@ class TestFetchMetadata:
             ),
         )
 
-        result = YouTubeLoader.fetch_metadata("https://www.youtube.com/watch?v=abc123")
+        result = YouTubeLoader.fetch_metadata(
+            "abc123", "https://www.youtube.com/watch?v=abc123"
+        )
 
-        assert result["title"] == "Test Video Title"
-        assert result["channel"] == "TestChannel"
-        assert result["duration"] == 300
-        assert result["upload_date"] == "20240101"
-        assert result["view_count"] == 12345
-        assert result["thumbnail"] == "https://img.youtube.com/vi/abc/default.jpg"
-        assert "extra_field" not in result
+        assert result.video_id == "abc123"
+        assert result.title == "Test Video Title"
+        assert result.channel == "TestChannel"
+        assert result.duration_sec == 300
+        assert result.upload_date == "20240101"
+        assert result.view_count == 12345
+        assert result.thumbnail_url == "https://img.youtube.com/vi/abc/default.jpg"
 
     def test_calls_ytdlp_correctly(self, mocker: Any) -> None:
         """fetch_metadata should invoke yt-dlp with the right arguments."""
@@ -161,7 +172,7 @@ class TestFetchMetadata:
         )
 
         url = "https://youtu.be/xyz789"
-        YouTubeLoader.fetch_metadata(url)
+        YouTubeLoader.fetch_metadata("xyz789", url)
 
         mock_run.assert_called_once_with(
             ["yt-dlp", "--dump-json", "--no-download", "--no-warnings", url],
@@ -169,3 +180,15 @@ class TestFetchMetadata:
             text=True,
             check=True,
         )
+
+    def test_converts_invalid_ytdlp_json(self, mocker: Any) -> None:
+        """Malformed external metadata should use the loader error boundary."""
+        mocker.patch(
+            "tubetalk.pipeline.loader.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="not json", stderr=""
+            ),
+        )
+
+        with pytest.raises(VideoLoaderError, match="Failed to fetch metadata"):
+            YouTubeLoader.fetch_metadata("abc123", "https://youtu.be/abc123")

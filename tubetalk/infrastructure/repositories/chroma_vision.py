@@ -5,13 +5,13 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-import chromadb
 from chromadb.errors import ChromaError
 
-from tubetalk.core.config import settings
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
+from tubetalk.infrastructure.repositories.chroma_base import ChromaVectorRepositoryBase
 from tubetalk.ports.embedding import EmbeddingProvider
 from tubetalk.ports.vision_index_repository import (
     VisionIndexRepositoryError,
@@ -30,10 +30,11 @@ class VisionVectorManifest:
     embedding_model: str
     embedding_dimension: int
     scene_count: int
-    indexed_at: str
+    indexed_at: datetime
+    collection_name: str = "vision_collection"
 
 
-class ChromaVisionIndexRepository:
+class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
     """Persist explicit visual-scene description vectors in local ChromaDB."""
 
     collection_name = "vision_collection"
@@ -42,19 +43,18 @@ class ChromaVisionIndexRepository:
         self,
         video_id: str,
         data_dir: Optional[Path] = None,
-        embedding_model: str = settings.embedding_model,
-        embedding_dimension: int = settings.embedding_dimension,
+        embedding_model: str = "gemini-embedding-2",
+        embedding_dimension: int = 768,
     ) -> None:
-        root_dir = data_dir or settings.data_dir
-        self.video_id = video_id
-        self.path = root_dir / video_id / "chromadb"
-        self.manifest_path = root_dir / video_id / "vision_vector_manifest.json"
-        self.embedding_model = embedding_model
-        self.embedding_dimension = embedding_dimension
+        root_dir = data_dir or Path("./data")
         try:
-            self.path.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(self.path))
-            self._collection = self._create_collection()
+            self._initialize(
+                video_id=video_id,
+                data_dir=root_dir,
+                manifest_filename="vision_vector_manifest.json",
+                embedding_model=embedding_model,
+                embedding_dimension=embedding_dimension,
+            )
         except (ChromaError, OSError) as error:
             raise VisionIndexRepositoryError(str(error)) from error
 
@@ -65,15 +65,18 @@ class ChromaVisionIndexRepository:
         self, scenes: Optional[tuple[VisionScene, ...]]
     ) -> VisionVectorIndexStatus:
         if not self.manifest_path.is_file():
-            return VisionVectorIndexStatus(state="missing")
+            return VisionVectorIndexStatus(state=CacheState.MISSING)
         try:
-            manifest = VisionVectorManifest(
-                **json.loads(self.manifest_path.read_text())
+            manifest_data = self._load_manifest_data()
+            self._collection_for_manifest(manifest_data)
+            manifest_data["indexed_at"] = datetime.fromisoformat(
+                manifest_data["indexed_at"]
             )
+            manifest = VisionVectorManifest(**manifest_data)
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return VisionVectorIndexStatus(state="invalid")
+            return VisionVectorIndexStatus(state=CacheState.INVALID)
         status = VisionVectorIndexStatus(
-            state="stale",
+            state=CacheState.STALE,
             scene_count=manifest.scene_count,
             embedding_model=manifest.embedding_model,
             embedding_dimension=manifest.embedding_dimension,
@@ -91,10 +94,10 @@ class ChromaVisionIndexRepository:
                 and manifest.scene_count == self.count()
             )
         except (ChromaError, OSError, TypeError, ValueError):
-            return VisionVectorIndexStatus(state="invalid")
+            return VisionVectorIndexStatus(state=CacheState.INVALID)
         return (
             VisionVectorIndexStatus(
-                state="current",
+                state=CacheState.CURRENT,
                 scene_count=manifest.scene_count,
                 embedding_model=manifest.embedding_model,
                 embedding_dimension=manifest.embedding_dimension,
@@ -110,23 +113,15 @@ class ChromaVisionIndexRepository:
         title: str,
         embedding_provider: EmbeddingProvider,
     ) -> int:
-        if (
-            embedding_provider.model != self.embedding_model
-            or embedding_provider.dimension != self.embedding_dimension
-        ):
-            raise ValueError(
-                "Embedding provider settings do not match the vector repository"
-            )
+        self._validate_provider(embedding_provider)
         documents = [format_scene_document(scene, title) for scene in scenes]
         embeddings = embedding_provider.embed_documents(documents)
-        if len(embeddings) != len(scenes) or any(
-            len(vector) != self.embedding_dimension for vector in embeddings
-        ):
-            raise ValueError("Embedding provider returned an unexpected vector shape")
+        self._validate_embeddings(embeddings, len(scenes))
         try:
-            self._collection = self._recreate_collection()
+            previous_collection = self._active_collection_name()
+            generation_name, generation = self._create_generation_collection()
             if scenes:
-                self._collection.upsert(
+                generation.upsert(
                     ids=[
                         f"{self.video_id}:scene:{index}:description"
                         for index in range(len(scenes))
@@ -147,35 +142,28 @@ class ChromaVisionIndexRepository:
                         for index, scene in enumerate(scenes)
                     ],
                 )
-            self._save_manifest(scenes)
+            self._save_manifest(scenes, generation_name)
         except (ChromaError, OSError) as error:
             raise VisionIndexRepositoryError(str(error)) from error
+        self._collection = generation
+        self._retire_collection(previous_collection)
         return len(scenes)
 
-    def count(self) -> int:
-        return self._collection.count()
-
-    def _create_collection(self) -> Any:
-        return self._client.get_or_create_collection(
-            name=self.collection_name,
-            metadata={"video_id": self.video_id, "hnsw:space": "cosine"},
-            embedding_function=None,
-        )
-
-    def _recreate_collection(self) -> Any:
-        self._client.delete_collection(name=self.collection_name)
-        return self._create_collection()
-
-    def _save_manifest(self, scenes: tuple[VisionScene, ...]) -> None:
+    def _save_manifest(
+        self, scenes: tuple[VisionScene, ...], collection_name: str
+    ) -> None:
         manifest = VisionVectorManifest(
             schema_version=VISION_VECTOR_SCHEMA_VERSION,
             scenes_sha256=scenes_sha256(scenes),
             embedding_model=self.embedding_model,
             embedding_dimension=self.embedding_dimension,
             scene_count=len(scenes),
-            indexed_at=datetime.now(timezone.utc).isoformat(),
+            indexed_at=datetime.now(timezone.utc),
+            collection_name=collection_name,
         )
-        self.manifest_path.write_text(json.dumps(asdict(manifest), indent=2) + "\n")
+        payload = asdict(manifest)
+        payload["indexed_at"] = manifest.indexed_at.isoformat()
+        self._save_manifest_data(payload)
 
 
 def format_scene_document(scene: VisionScene, title: str) -> str:

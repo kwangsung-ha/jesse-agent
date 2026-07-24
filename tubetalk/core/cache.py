@@ -2,11 +2,15 @@
 
 import hashlib
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from tubetalk.core.config import settings
+from pydantic import BaseModel, ConfigDict
+
+from tubetalk.domain.state import CacheState
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     Chapter,
@@ -15,7 +19,9 @@ from tubetalk.domain.summary import (
     SummaryManifest,
     VideoSummary,
 )
+from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import transcript_sha256
+from tubetalk.domain.video import CachedVideo, VideoMetadata
 from tubetalk.domain.video_status import VideoStatus
 from tubetalk.domain.vision import (
     VISION_SCHEMA_VERSION,
@@ -26,11 +32,30 @@ from tubetalk.domain.vision import (
 )
 
 
+class CacheFreshnessPolicy(BaseModel):
+    """Expected derived-artifact settings used for cache status checks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary_model: str = "gemini-3.5-flash-lite"
+    summary_prompt_version: str = "summary-chapters-v1"
+    summary_language: str = "ko"
+    vision_model: str = "gemini-3.5-flash"
+    vision_prompt_version: str = "vision-scenes-v2-30s"
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dimension: int = 768
+
+
 class LocalCacheManager:
     """Manages local JSON file cache under ``data/{video_id}/``."""
 
-    def __init__(self, data_dir: Optional[Path] = None) -> None:
-        self._data_dir = data_dir or settings.data_dir
+    def __init__(
+        self,
+        data_dir: Optional[Path] = None,
+        freshness_policy: CacheFreshnessPolicy = CacheFreshnessPolicy(),
+    ) -> None:
+        self._data_dir = data_dir or Path("./data")
+        self._freshness_policy = freshness_policy
 
     # ------------------------------------------------------------------
     # Directory helpers
@@ -61,12 +86,36 @@ class LocalCacheManager:
         """Serialize *data* to ``data/{video_id}/{filename}``."""
         video_dir = self.get_video_dir(video_id)
         filepath = video_dir / filename
-        filepath.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        _atomic_write_json(filepath, data)
 
     def load_json(self, video_id: str, filename: str) -> Any:
         """Deserialize and return content of ``data/{video_id}/{filename}``."""
         filepath = self._data_dir / video_id / filename
         return json.loads(filepath.read_text())
+
+    def save_video(self, video: CachedVideo) -> None:
+        """Persist the typed resources required for a reusable video cache."""
+        self.save_json(
+            video.metadata.video_id,
+            "metadata.json",
+            video.metadata.model_dump(mode="json"),
+        )
+        self.save_json(
+            video.metadata.video_id,
+            "transcript.json",
+            video.transcript.model_dump(mode="json")["segments"],
+        )
+
+    def load_video(self, video_id: str) -> CachedVideo:
+        """Load and validate a complete video cache as domain objects."""
+        return CachedVideo(
+            metadata=VideoMetadata.model_validate(
+                self.load_json(video_id, "metadata.json")
+            ),
+            transcript=Transcript.model_validate(
+                {"segments": self.load_json(video_id, "transcript.json")}
+            ),
+        )
 
     def save_summary(self, video_id: str, entry: SummaryCacheEntry) -> None:
         """Persist a generated summary and the inputs used to create it."""
@@ -84,14 +133,14 @@ class LocalCacheManager:
                 "model": entry.manifest.model,
                 "prompt_version": entry.manifest.prompt_version,
                 "language": entry.manifest.language,
-                "generated_at": entry.manifest.generated_at,
+                "generated_at": entry.manifest.generated_at.isoformat(),
             },
         )
 
     def get_summary_status(
         self,
         video_id: str,
-        transcript: list[dict[str, Any]],
+        transcript: Transcript,
         *,
         model: str,
         prompt_version: str,
@@ -100,11 +149,11 @@ class LocalCacheManager:
         """Return whether a cached summary matches its transcript and settings."""
         summary_path = self._data_dir / video_id / "summary.json"
         if not summary_path.is_file():
-            return SummaryCacheStatus(state="missing")
+            return SummaryCacheStatus(state=CacheState.MISSING)
         try:
             entry = _summary_cache_entry(json.loads(summary_path.read_text()))
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return SummaryCacheStatus(state="invalid")
+            return SummaryCacheStatus(state=CacheState.INVALID)
         manifest = entry.manifest
         if (
             manifest.transcript_sha256 != transcript_sha256(transcript)
@@ -112,8 +161,8 @@ class LocalCacheManager:
             or manifest.prompt_version != prompt_version
             or manifest.language != language
         ):
-            return SummaryCacheStatus(state="stale", entry=entry)
-        return SummaryCacheStatus(state="current", entry=entry)
+            return SummaryCacheStatus(state=CacheState.STALE, entry=entry)
+        return SummaryCacheStatus(state=CacheState.CURRENT, entry=entry)
 
     def save_vision_index(self, video_id: str, entry: VisionIndexEntry) -> None:
         """Persist generated visual scenes and their generation provenance."""
@@ -134,7 +183,7 @@ class LocalCacheManager:
                 "source_url": entry.manifest.source_url,
                 "model": entry.manifest.model,
                 "prompt_version": entry.manifest.prompt_version,
-                "generated_at": entry.manifest.generated_at,
+                "generated_at": entry.manifest.generated_at.isoformat(),
             },
         )
 
@@ -149,19 +198,19 @@ class LocalCacheManager:
         """Return whether a visual index matches its source and settings."""
         vision_path = self._data_dir / video_id / "vision_index.json"
         if not vision_path.is_file():
-            return VisionIndexStatus(state="missing")
+            return VisionIndexStatus(state=CacheState.MISSING)
         try:
             entry = _vision_index_entry(json.loads(vision_path.read_text()))
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return VisionIndexStatus(state="invalid")
+            return VisionIndexStatus(state=CacheState.INVALID)
         manifest = entry.manifest
         if (
             manifest.source_url != source_url
             or manifest.model != model
             or manifest.prompt_version != prompt_version
         ):
-            return VisionIndexStatus(state="stale", entry=entry)
-        return VisionIndexStatus(state="current", entry=entry)
+            return VisionIndexStatus(state=CacheState.STALE, entry=entry)
+        return VisionIndexStatus(state=CacheState.CURRENT, entry=entry)
 
     # ------------------------------------------------------------------
     # Listing / status helpers
@@ -209,39 +258,38 @@ class LocalCacheManager:
             except (json.JSONDecodeError, OSError):
                 pass
 
-        vision_status = VisionIndexStatus(state="missing")
+        vision_status = VisionIndexStatus(state=CacheState.MISSING)
         source_url = metadata.get("source_url")
         if has_vision_index:
             if isinstance(source_url, str) and source_url:
                 vision_status = self.get_vision_index_status(
                     video_id,
                     source_url=source_url,
-                    model=settings.vision_model,
-                    prompt_version=settings.vision_prompt_version,
+                    model=self._freshness_policy.vision_model,
+                    prompt_version=self._freshness_policy.vision_prompt_version,
                 )
             else:
-                vision_status = VisionIndexStatus(state="invalid")
+                vision_status = VisionIndexStatus(state=CacheState.INVALID)
         vision_entry = vision_status.entry
 
         transcript_count = 0
-        transcript: list[dict[str, Any]] = []
+        transcript = Transcript(segments=())
         if has_transcript:
             try:
                 loaded_transcript = json.loads(
                     (video_dir / "transcript.json").read_text()
                 )
-                if isinstance(loaded_transcript, list):
-                    transcript = loaded_transcript
-                    transcript_count = len(transcript)
+                transcript = Transcript.model_validate({"segments": loaded_transcript})
+                transcript_count = len(transcript)
             except (json.JSONDecodeError, OSError):
                 pass
 
         summary_status = self.get_summary_status(
             video_id,
             transcript,
-            model=settings.summary_model,
-            prompt_version=settings.summary_prompt_version,
-            language=settings.summary_language,
+            model=self._freshness_policy.summary_model,
+            prompt_version=self._freshness_policy.summary_prompt_version,
+            language=self._freshness_policy.summary_language,
         )
         summary_entry = summary_status.entry
 
@@ -260,7 +308,9 @@ class LocalCacheManager:
             has_transcript=has_transcript,
             has_vision_index=has_vision_index,
             transcript_segments=transcript_count,
-            transcript_index_state=str(transcript_index["transcript_index_state"]),
+            transcript_index_state=CacheState(
+                str(transcript_index["transcript_index_state"])
+            ),
             transcript_index_chunks=_optional_int(
                 transcript_index["transcript_index_chunks"]
             ),
@@ -270,7 +320,7 @@ class LocalCacheManager:
             transcript_index_dimension=_optional_int(
                 transcript_index["transcript_index_dimension"]
             ),
-            transcript_indexed_at=_optional_string(
+            transcript_indexed_at=_optional_datetime(
                 transcript_index["transcript_indexed_at"]
             ),
             summary_state=summary_status.state,
@@ -349,8 +399,10 @@ class LocalCacheManager:
             ).hexdigest()
             if (
                 manifest.get("transcript_sha256") != transcript_sha256
-                or manifest.get("embedding_model") != settings.embedding_model
-                or manifest.get("embedding_dimension") != settings.embedding_dimension
+                or manifest.get("embedding_model")
+                != self._freshness_policy.embedding_model
+                or manifest.get("embedding_dimension")
+                != self._freshness_policy.embedding_dimension
             ):
                 return {**result, "transcript_index_state": "stale"}
 
@@ -361,6 +413,32 @@ class LocalCacheManager:
 
 def _optional_string(value: Any) -> Optional[str]:
     return value if isinstance(value, str) else None
+
+
+def _optional_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    """Replace a JSON cache file only after its complete temporary write."""
+    serialized = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", text=True
+    )
+    try:
+        with os.fdopen(descriptor, "w") as temporary_file:
+            temporary_file.write(serialized)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_name, path)
+    except BaseException:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
 
 
 def _optional_int(value: Any) -> Optional[int]:
@@ -387,7 +465,7 @@ def _summary_cache_entry(data: Any) -> SummaryCacheEntry:
         model=_required_text(data, "model"),
         prompt_version=_required_text(data, "prompt_version"),
         language=_required_text(data, "language"),
-        generated_at=_required_text(data, "generated_at"),
+        generated_at=datetime.fromisoformat(_required_text(data, "generated_at")),
     )
     if manifest.schema_version != SUMMARY_SCHEMA_VERSION:
         raise ValueError("Unsupported summary cache schema version")
@@ -423,7 +501,7 @@ def _vision_index_entry(data: Any) -> VisionIndexEntry:
         source_url=_required_text(data, "source_url"),
         model=_required_text(data, "model"),
         prompt_version=_required_text(data, "prompt_version"),
-        generated_at=_required_text(data, "generated_at"),
+        generated_at=datetime.fromisoformat(_required_text(data, "generated_at")),
     )
     if manifest.schema_version != VISION_SCHEMA_VERSION:
         raise ValueError("Unsupported vision cache schema version")

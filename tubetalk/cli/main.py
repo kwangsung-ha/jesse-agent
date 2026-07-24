@@ -211,6 +211,11 @@ def _format_duration(seconds: float) -> str:
     return f"{seconds:.2f}s"
 
 
+def _format_datetime(value: datetime | None) -> str:
+    """Render a domain timestamp at the CLI boundary."""
+    return value.isoformat() if value is not None else "—"
+
+
 def _show_summary(summary: VideoSummary) -> None:
     """Render a summary and its timestamp chapters consistently across commands."""
     console.print("[bold cyan]Summary[/bold cyan]")
@@ -248,10 +253,11 @@ def _show_all(videos: list[VideoStatus]) -> None:
     table.add_column("Summary", justify="center")
     table.add_column("Vision", justify="center")
     for video in videos:
+        details = video.details
         table.add_row(
             video.video_id,
             video.title or "—",
-            str(video.transcript_segments),
+            str(details.transcript_segment_count),
             _format_index_summary(video),
             _format_summary_summary(video),
             _format_vision_summary(video),
@@ -269,6 +275,7 @@ def _show_detail(status_info: VideoStatus) -> None:
     table.add_column("Key", style="bold cyan")
     table.add_column("Value", style="white")
     duration = status_info.duration
+    details = status_info.details
     duration_str = f"{duration:.0f}s" if duration is not None else "—"
     rows = [
         ("Video ID", status_info.video_id),
@@ -277,58 +284,64 @@ def _show_detail(status_info: VideoStatus) -> None:
         ("Duration", duration_str),
         ("Metadata", "✅" if status_info.has_metadata else "❌"),
         ("Transcript", "✅" if status_info.has_transcript else "❌"),
-        ("Transcript Segments", str(status_info.transcript_segments)),
+        ("Transcript Segments", str(details.transcript_segment_count)),
         ("Transcript Index", _format_index_state(status_info)),
         (
             "Indexed Chunks",
-            str(status_info.transcript_index_chunks)
-            if status_info.transcript_index_chunks is not None
+            str(details.transcript_index.item_count)
+            if details.transcript_index.item_count is not None
             else "—",
         ),
-        ("Embedding Model", status_info.transcript_index_model or "—"),
+        ("Embedding Model", details.transcript_index.embedding_model or "—"),
         (
             "Embedding Dimension",
-            str(status_info.transcript_index_dimension)
-            if status_info.transcript_index_dimension is not None
+            str(details.transcript_index.embedding_dimension)
+            if details.transcript_index.embedding_dimension is not None
             else "—",
         ),
-        ("Transcript Indexed At", status_info.transcript_indexed_at or "—"),
+        (
+            "Transcript Indexed At",
+            _format_datetime(details.transcript_index.indexed_at),
+        ),
         ("Summary", _format_summary_state(status_info)),
         (
             "Summary Chapters",
-            str(status_info.summary_chapters)
-            if status_info.summary_chapters is not None
+            str(details.summary.chapter_count)
+            if details.summary.chapter_count is not None
             else "—",
         ),
-        ("Summary Model", status_info.summary_model or "—"),
-        ("Summary Prompt", status_info.summary_prompt_version or "—"),
-        ("Summary Language", status_info.summary_language or "—"),
-        ("Summary Generated At", status_info.summary_generated_at or "—"),
+        ("Summary Model", details.summary.model or "—"),
+        ("Summary Prompt", details.summary.prompt_version or "—"),
+        ("Summary Language", details.summary.language or "—"),
+        ("Summary Generated At", _format_datetime(details.summary.generated_at)),
         ("Vision Index", _format_vision_state(status_info)),
         (
             "Vision Scenes",
-            str(status_info.vision_scene_count)
-            if status_info.vision_scene_count is not None
+            str(details.vision.scene_count)
+            if details.vision.scene_count is not None
             else "—",
         ),
-        ("Vision Model", status_info.vision_model or "—"),
-        ("Vision Prompt", status_info.vision_prompt_version or "—"),
-        ("Vision Generated At", status_info.vision_generated_at or "—"),
+        ("Vision Model", details.vision.model or "—"),
+        ("Vision Prompt", details.vision.prompt_version or "—"),
+        ("Vision Generated At", _format_datetime(details.vision.generated_at)),
         ("Vision Vector Index", _format_vision_vector_state(status_info)),
         (
             "Vision Vector Scenes",
-            str(status_info.vision_vector_index_scenes)
-            if status_info.vision_vector_index_scenes is not None
+            str(details.vision_vector_index.item_count)
+            if details.vision_vector_index.item_count is not None
             else "—",
         ),
-        ("Vision Embedding Model", status_info.vision_vector_index_model or "—"),
+        ("Vision Embedding Model", details.vision_vector_index.embedding_model or "—"),
         (
             "Vision Embedding Dimension",
-            str(status_info.vision_vector_index_dimension)
-            if status_info.vision_vector_index_dimension is not None
+            str(details.vision_vector_index.embedding_dimension)
+            if details.vision_vector_index.embedding_dimension is not None
             else "—",
         ),
-        ("Vision Indexed At", status_info.vision_vector_indexed_at or "—"),
+        (
+            "Vision Indexed At",
+            _format_datetime(details.vision_vector_index.indexed_at),
+        ),
         ("Cached At", status_info.cached_at or "—"),
     ]
     for key, value in rows:
@@ -338,88 +351,81 @@ def _show_detail(status_info: VideoStatus) -> None:
 
 def _format_index_summary(status_info: VideoStatus) -> str:
     """Format text index state for the all-videos table."""
-    if status_info.transcript_index_state == "current":
-        return (
-            f"✅ {status_info.transcript_index_chunks}"
-            if status_info.transcript_index_chunks is not None
-            else "✅"
-        )
-    if status_info.transcript_index_state == "stale":
+    index = status_info.details.transcript_index
+    if index.state == "current":
+        return f"✅ {index.item_count}" if index.item_count is not None else "✅"
+    if index.state == "stale":
         return "⚠️ stale"
-    if status_info.transcript_index_state == "invalid":
+    if index.state == "invalid":
         return "❌ invalid"
     return "—"
 
 
 def _format_index_state(status_info: VideoStatus) -> str:
     """Format text index state for the detail table."""
-    if status_info.transcript_index_state == "current":
+    if status_info.details.transcript_index.state == "current":
         return "✅ Current"
-    if status_info.transcript_index_state == "stale":
+    if status_info.details.transcript_index.state == "stale":
         return "⚠️ Stale"
-    if status_info.transcript_index_state == "invalid":
+    if status_info.details.transcript_index.state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"
 
 
 def _format_summary_summary(status_info: VideoStatus) -> str:
     """Format summary state for the all-videos table."""
-    if status_info.summary_state == "current":
+    summary = status_info.details.summary
+    if summary.state == "current":
         return (
-            f"✅ {status_info.summary_chapters}"
-            if status_info.summary_chapters is not None
-            else "✅"
+            f"✅ {summary.chapter_count}" if summary.chapter_count is not None else "✅"
         )
-    if status_info.summary_state == "stale":
+    if summary.state == "stale":
         return "⚠️ stale"
-    if status_info.summary_state == "invalid":
+    if summary.state == "invalid":
         return "❌ invalid"
     return "—"
 
 
 def _format_summary_state(status_info: VideoStatus) -> str:
     """Format summary state for the detailed status table."""
-    if status_info.summary_state == "current":
+    if status_info.details.summary.state == "current":
         return "✅ Current"
-    if status_info.summary_state == "stale":
+    if status_info.details.summary.state == "stale":
         return "⚠️ Stale"
-    if status_info.summary_state == "invalid":
+    if status_info.details.summary.state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"
 
 
 def _format_vision_summary(status_info: VideoStatus) -> str:
     """Format visual-scene index freshness for the all-videos table."""
-    if status_info.vision_index_state == "current":
-        return (
-            f"✅ {status_info.vision_scene_count}"
-            if status_info.vision_scene_count is not None
-            else "✅"
-        )
-    if status_info.vision_index_state == "stale":
+    vision = status_info.details.vision
+    if vision.state == "current":
+        return f"✅ {vision.scene_count}" if vision.scene_count is not None else "✅"
+    if vision.state == "stale":
         return "⚠️ stale"
-    if status_info.vision_index_state == "invalid":
+    if vision.state == "invalid":
         return "❌ invalid"
     return "—"
 
 
 def _format_vision_state(status_info: VideoStatus) -> str:
     """Format visual-scene index freshness for a detail view."""
-    if status_info.vision_index_state == "current":
+    if status_info.details.vision.state == "current":
         return "✅ Current"
-    if status_info.vision_index_state == "stale":
+    if status_info.details.vision.state == "stale":
         return "⚠️ Stale"
-    if status_info.vision_index_state == "invalid":
+    if status_info.details.vision.state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"
 
 
 def _format_vision_vector_state(status_info: VideoStatus) -> str:
     """Format visual vector-index freshness for a detail view."""
-    if status_info.vision_vector_index_state == "current":
+    if status_info.details.vision_vector_index.state == "current":
         return "✅ Current"
-    if status_info.vision_vector_index_state == "stale":
+    if status_info.details.vision_vector_index.state == "stale":
         return "⚠️ Stale"
-    if status_info.vision_vector_index_state == "invalid":
+    if status_info.details.vision_vector_index.state == "invalid":
         return "❌ Invalid"
     return "❌ Missing"

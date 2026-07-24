@@ -11,6 +11,7 @@ from tubetalk.infrastructure.repositories.chroma_vision import (
     ChromaVisionIndexRepository,
     format_scene_document,
 )
+from tubetalk.ports.vision_index_repository import VisionIndexRepositoryError
 
 
 class FakeEmbeddingProvider:
@@ -35,7 +36,7 @@ def _make_store(
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     mocker.patch(
-        "tubetalk.infrastructure.repositories.chroma_vision.chromadb.PersistentClient",
+        "tubetalk.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
         return_value=client,
     )
     store = ChromaVisionIndexRepository(
@@ -106,6 +107,24 @@ def test_index_scenes_rebuilds_collection_and_writes_manifest(
     manifest = json.loads(store.manifest_path.read_text())
     assert manifest["scene_count"] == 2
     assert manifest["embedding_model"] == "gemini-embedding-2"
+    assert manifest["collection_name"].startswith("vision_collection__")
+
+
+def test_failed_generation_keeps_previous_vision_index_active(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """A failed generation cannot replace or delete the active scene index."""
+    store, client, collection = _make_store(tmp_path, mocker)
+    store.manifest_path.write_text('{"collection_name": "vision_collection"}')
+    collection.upsert.side_effect = OSError("write failed")
+
+    with pytest.raises(VisionIndexRepositoryError, match="write failed"):
+        store.index_scenes(_scenes(), "Example", FakeEmbeddingProvider())
+
+    assert json.loads(store.manifest_path.read_text()) == {
+        "collection_name": "vision_collection"
+    }
+    client.delete_collection.assert_not_called()
 
 
 def test_index_status_detects_current_stale_missing_and_invalid_indexes(
