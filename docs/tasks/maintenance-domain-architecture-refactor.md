@@ -20,5 +20,5 @@
   내부 기반으로 추출한다.
 - [x] **Check M.6**: `VideoService`의 수집·인덱싱·요약·비전 orchestration을
   독립 협력자로 분리한다.
-- [ ] **Check M.7**: JSON atomic write와 세대별 Chroma collection 교체로 저장
+- [x] **Check M.7**: JSON atomic write와 세대별 Chroma collection 교체로 저장
   실패 시 기존 캐시·인덱스를 보존한다.

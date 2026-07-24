@@ -31,6 +31,7 @@ class VisionVectorManifest:
     embedding_dimension: int
     scene_count: int
     indexed_at: datetime
+    collection_name: str = "vision_collection"
 
 
 class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
@@ -67,6 +68,7 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
             return VisionVectorIndexStatus(state=CacheState.MISSING)
         try:
             manifest_data = self._load_manifest_data()
+            self._collection_for_manifest(manifest_data)
             manifest_data["indexed_at"] = datetime.fromisoformat(
                 manifest_data["indexed_at"]
             )
@@ -116,9 +118,10 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
         embeddings = embedding_provider.embed_documents(documents)
         self._validate_embeddings(embeddings, len(scenes))
         try:
-            self._collection = self._recreate_collection()
+            previous_collection = self._active_collection_name()
+            generation_name, generation = self._create_generation_collection()
             if scenes:
-                self._collection.upsert(
+                generation.upsert(
                     ids=[
                         f"{self.video_id}:scene:{index}:description"
                         for index in range(len(scenes))
@@ -139,12 +142,16 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
                         for index, scene in enumerate(scenes)
                     ],
                 )
-            self._save_manifest(scenes)
+            self._save_manifest(scenes, generation_name)
         except (ChromaError, OSError) as error:
             raise VisionIndexRepositoryError(str(error)) from error
+        self._collection = generation
+        self._retire_collection(previous_collection)
         return len(scenes)
 
-    def _save_manifest(self, scenes: tuple[VisionScene, ...]) -> None:
+    def _save_manifest(
+        self, scenes: tuple[VisionScene, ...], collection_name: str
+    ) -> None:
         manifest = VisionVectorManifest(
             schema_version=VISION_VECTOR_SCHEMA_VERSION,
             scenes_sha256=scenes_sha256(scenes),
@@ -152,6 +159,7 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
             embedding_dimension=self.embedding_dimension,
             scene_count=len(scenes),
             indexed_at=datetime.now(timezone.utc),
+            collection_name=collection_name,
         )
         payload = asdict(manifest)
         payload["indexed_at"] = manifest.indexed_at.isoformat()

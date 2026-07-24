@@ -67,6 +67,7 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
             return TranscriptIndexStatus(state=CacheState.MISSING)
         try:
             manifest_data = self._load_manifest_data()
+            self._collection_for_manifest(manifest_data)
             manifest_data["indexed_at"] = datetime.fromisoformat(
                 manifest_data["indexed_at"]
             )
@@ -126,9 +127,10 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
         embeddings = embedding_provider.embed_documents(documents)
         self._validate_embeddings(embeddings, len(chunks))
         try:
-            self._collection = self._recreate_collection()
+            previous_collection = self._active_collection_name()
+            generation_name, generation = self._create_generation_collection()
             if chunks:
-                self._collection.upsert(
+                generation.upsert(
                     ids=[f"{self.video_id}:chunk:{chunk.index}" for chunk in chunks],
                     documents=[chunk.text for chunk in chunks],
                     embeddings=embeddings,
@@ -146,12 +148,16 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
                         for chunk in chunks
                     ],
                 )
-            self._save_manifest(transcript, len(chunks))
+            self._save_manifest(transcript, len(chunks), generation_name)
         except (ChromaError, OSError) as error:
             raise TranscriptIndexRepositoryError(str(error)) from error
+        self._collection = generation
+        self._retire_collection(previous_collection)
         return len(chunks)
 
-    def _save_manifest(self, transcript: Transcript, chunk_count: int) -> None:
+    def _save_manifest(
+        self, transcript: Transcript, chunk_count: int, collection_name: str
+    ) -> None:
         manifest = IndexManifest(
             schema_version=INDEX_SCHEMA_VERSION,
             transcript_sha256=transcript_sha256(transcript),
@@ -160,6 +166,7 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
             chunk_policy_version=CHUNK_POLICY_VERSION,
             chunk_count=chunk_count,
             indexed_at=datetime.now(timezone.utc),
+            collection_name=collection_name,
         )
         payload = asdict(manifest)
         payload["indexed_at"] = manifest.indexed_at.isoformat()

@@ -4,6 +4,9 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from tubetalk.core.cache import LocalCacheManager
 from tubetalk.domain.summary import (
@@ -92,6 +95,21 @@ def test_save_json_unicode(tmp_path: Path) -> None:
 
     loaded = cache.load_json("vid1", "transcript.json")
     assert loaded == data
+
+
+def test_save_json_preserves_existing_cache_when_atomic_replace_fails(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """A failed replacement must leave a complete prior JSON cache untouched."""
+    cache = LocalCacheManager(data_dir=tmp_path)
+    cache.save_json("vid1", "metadata.json", {"title": "previous"})
+    mocker.patch("tubetalk.core.cache.os.replace", side_effect=OSError("disk full"))
+
+    with pytest.raises(OSError, match="disk full"):
+        cache.save_json("vid1", "metadata.json", {"title": "replacement"})
+
+    assert cache.load_json("vid1", "metadata.json") == {"title": "previous"}
+    assert not list((tmp_path / "vid1").glob(".metadata.json.*.tmp"))
 
 
 # ------------------------------------------------------------------

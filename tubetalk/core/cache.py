@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -84,7 +86,7 @@ class LocalCacheManager:
         """Serialize *data* to ``data/{video_id}/{filename}``."""
         video_dir = self.get_video_dir(video_id)
         filepath = video_dir / filename
-        filepath.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        _atomic_write_json(filepath, data)
 
     def load_json(self, video_id: str, filename: str) -> Any:
         """Deserialize and return content of ``data/{video_id}/{filename}``."""
@@ -420,6 +422,23 @@ def _optional_datetime(value: Any) -> Optional[datetime]:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    """Replace a JSON cache file only after its complete temporary write."""
+    serialized = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", text=True
+    )
+    try:
+        with os.fdopen(descriptor, "w") as temporary_file:
+            temporary_file.write(serialized)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_name, path)
+    except BaseException:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
 
 
 def _optional_int(value: Any) -> Optional[int]:

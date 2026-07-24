@@ -18,6 +18,7 @@ from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
 from tubetalk.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
 )
+from tubetalk.ports.transcript_index_repository import TranscriptIndexRepositoryError
 
 
 class FakeEmbeddingProvider:
@@ -170,6 +171,29 @@ def test_index_transcript_rebuilds_collection_and_writes_manifest(
     assert manifest["embedding_model"] == "gemini-embedding-2"
     assert manifest["chunk_policy_version"] == CHUNK_POLICY_VERSION
     assert manifest["chunk_count"] == 1
+    assert manifest["collection_name"].startswith("transcript_collection__")
+
+
+def test_failed_generation_keeps_previous_transcript_index_active(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """A failed manifest switch must not delete the collection named by it."""
+    store, client, collection = _make_store(tmp_path, mocker)
+    store.manifest_path.write_text('{"collection_name": "transcript_collection"}')
+    mocker.patch(
+        "tubetalk.infrastructure.repositories.chroma_base.os.replace",
+        side_effect=OSError("write failed"),
+    )
+
+    with pytest.raises(TranscriptIndexRepositoryError, match="write failed"):
+        store.index_transcript(
+            _transcript((0, 0, "Hello")), "Example", FakeEmbeddingProvider()
+        )
+
+    assert json.loads(store.manifest_path.read_text()) == {
+        "collection_name": "transcript_collection"
+    }
+    client.delete_collection.assert_not_called()
 
 
 def test_needs_indexing_detects_current_and_stale_transcripts(

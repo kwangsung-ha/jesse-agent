@@ -51,6 +51,7 @@ class IndexManifest:
     chunk_policy_version: str
     chunk_count: int
     indexed_at: datetime
+    collection_name: str = "transcript_collection"
 
     def __post_init__(self) -> None:
         if isinstance(self.indexed_at, str):
