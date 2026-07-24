@@ -1,6 +1,6 @@
 """Application use cases for ingesting videos and reading their status."""
 
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Callable, Optional
@@ -11,7 +11,6 @@ from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     SummaryCacheEntry,
     SummaryManifest,
-    VideoSummary,
 )
 from tubetalk.domain.transcript import Transcript
 from tubetalk.domain.transcript_index import transcript_sha256
@@ -44,6 +43,18 @@ from tubetalk.ports.vision_index_repository import (
     VisionIndexRepositoryError,
     VisionVectorIndexStatus,
 )
+from tubetalk.services.results import (
+    IndexingResult,
+    ProcessResult,
+    ProcessTiming,
+    SummaryResult,
+    VisionResult,
+)
+from tubetalk.services.stages import (
+    SummaryGenerationStage,
+    TranscriptIndexingStage,
+    VideoIngestionStage,
+)
 
 
 class VideoServiceError(Exception):
@@ -68,62 +79,6 @@ class SummaryUnavailableError(VideoServiceError):
 
 class SummaryGenerationError(VideoServiceError):
     """Raised when an explicitly requested summary cannot be generated."""
-
-
-@dataclass(frozen=True)
-class IndexingResult:
-    """Outcome of checking or updating a transcript vector index."""
-
-    state: SyncState
-    chunk_count: Optional[int] = None
-    warning: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class SummaryResult:
-    """Outcome of checking or updating a cached video summary."""
-
-    state: SyncState
-    summary: Optional[VideoSummary] = None
-    warning: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class VisionResult:
-    """Outcome of checking or generating a cached visual scene index."""
-
-    state: SyncState
-    scene_count: Optional[int] = None
-    warning: Optional[str] = None
-    indexing: IndexingResult = field(
-        default_factory=lambda: IndexingResult(state=SyncState.MISSING)
-    )
-
-
-@dataclass(frozen=True)
-class ProcessTiming:
-    """Wall-clock durations for the independently observable process stages."""
-
-    ingestion_sec: float = 0.0
-    transcript_index_sec: float = 0.0
-    summary_sec: float = 0.0
-    vision_sec: float = 0.0
-    total_sec: float = 0.0
-
-
-@dataclass(frozen=True)
-class ProcessResult:
-    """Outcome of processing a video URL into the local cache."""
-
-    video_id: str
-    cache_hit: bool
-    transcript_segments: int
-    indexing: IndexingResult
-    summary: SummaryResult
-    vision: VisionResult = field(
-        default_factory=lambda: VisionResult(state=SyncState.MISSING)
-    )
-    timing: ProcessTiming = field(default_factory=ProcessTiming)
 
 
 class VideoService:
@@ -157,75 +112,48 @@ class VideoService:
         self._summary_language = summary_language
         self._vision_model = vision_model
         self._vision_prompt_version = vision_prompt_version
+        self._ingestion_stage = VideoIngestionStage(cache, loader)
+        self._transcript_indexing_stage = TranscriptIndexingStage(
+            transcript_index_repository_factory, embedding_provider_factory
+        )
+        self._summary_stage = SummaryGenerationStage(
+            cache,
+            summary_provider_factory,
+            summary_model,
+            summary_prompt_version,
+            summary_language,
+        )
 
     def process(self, url: str) -> ProcessResult:
         """Fetch or reuse a video cache, then bring its index up to date."""
         total_started = perf_counter()
-        try:
-            video_id = self._loader.extract_video_id(url)
-        except LoaderInvalidVideoUrlError as error:
-            raise InvalidVideoUrlError(str(error)) from error
-
-        if self._cache.has_cache(video_id):
-            ingestion_started = perf_counter()
-            cached_video = self._load_cached_resources(video_id)
-            ingestion_sec = perf_counter() - ingestion_started
-            indexing_started = perf_counter()
-            indexing = self._sync_transcript_index(
-                video_id, cached_video.metadata, cached_video.transcript
-            )
-            transcript_index_sec = perf_counter() - indexing_started
-            summary_started = perf_counter()
-            summary = self._sync_summary(
-                video_id, cached_video.metadata, cached_video.transcript
-            )
-            summary_sec = perf_counter() - summary_started
-            vision_started = perf_counter()
-            vision = self._sync_vision_index(video_id, cached_video.metadata)
-            vision_sec = perf_counter() - vision_started
-            return ProcessResult(
-                video_id=video_id,
-                cache_hit=True,
-                transcript_segments=len(cached_video.transcript),
-                indexing=indexing,
-                summary=summary,
-                vision=vision,
-                timing=ProcessTiming(
-                    ingestion_sec=ingestion_sec,
-                    transcript_index_sec=transcript_index_sec,
-                    summary_sec=summary_sec,
-                    vision_sec=vision_sec,
-                    total_sec=perf_counter() - total_started,
-                ),
-            )
-
         ingestion_started = perf_counter()
         try:
-            metadata = self._loader.fetch_metadata(video_id, url)
-            transcript = self._loader.fetch_transcript(video_id)
+            ingestion = self._ingestion_stage.load_or_collect(url)
+        except LoaderInvalidVideoUrlError as error:
+            raise InvalidVideoUrlError(str(error)) from error
         except VideoLoaderError as error:
-            raise VideoIngestionError(
-                f"Failed to process {video_id}: {error}"
-            ) from error
-
-        metadata = metadata.model_copy(
-            update={"processed_at": datetime.now(timezone.utc)}
-        )
-        self._cache.save_video(CachedVideo(metadata=metadata, transcript=transcript))
+            raise VideoIngestionError(f"Failed to process: {error}") from error
         ingestion_sec = perf_counter() - ingestion_started
+        video_id = ingestion.video_id
+        cached_video = ingestion.video
         indexing_started = perf_counter()
-        indexing = self._sync_transcript_index(video_id, metadata, transcript)
+        indexing = self._transcript_indexing_stage.sync(
+            video_id, cached_video.metadata, cached_video.transcript
+        )
         transcript_index_sec = perf_counter() - indexing_started
         summary_started = perf_counter()
-        summary = self._sync_summary(video_id, metadata, transcript)
+        summary = self._summary_stage.sync(
+            video_id, cached_video.metadata, cached_video.transcript
+        )
         summary_sec = perf_counter() - summary_started
         vision_started = perf_counter()
-        vision = self._sync_vision_index(video_id, metadata)
+        vision = self._sync_vision_index(video_id, cached_video.metadata)
         vision_sec = perf_counter() - vision_started
         return ProcessResult(
             video_id=video_id,
-            cache_hit=False,
-            transcript_segments=len(transcript),
+            cache_hit=ingestion.cache_hit,
+            transcript_segments=len(cached_video.transcript),
             indexing=indexing,
             summary=summary,
             vision=vision,
