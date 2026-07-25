@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 from tubetalk.agent.retriever import HybridRetrievalError, HybridRetriever
 from tubetalk.core.cache import LocalCacheManager
+from tubetalk.core.logging import logger
 from tubetalk.domain.retrieval import ChatAnswer, ChatTurn, RetrievalHit
 from tubetalk.domain.state import CacheState, SyncState
 from tubetalk.domain.transcript import Transcript
@@ -169,6 +170,7 @@ class VideoService:
 
     def process(self, url: str) -> ProcessResult:
         """Fetch or reuse a video cache, then bring its index up to date."""
+        logger.bind(event="service.process.start").debug("url={}", url)
         total_started = perf_counter()
         ingestion_started = perf_counter()
         try:
@@ -178,6 +180,9 @@ class VideoService:
         except VideoLoaderError as error:
             raise VideoIngestionError(f"Failed to process: {error}") from error
         ingestion_sec = perf_counter() - ingestion_started
+        logger.bind(
+            event="service.ingestion.complete", video_id=ingestion.video_id
+        ).debug("cache_hit={} elapsed_sec={:.3f}", ingestion.cache_hit, ingestion_sec)
         video_id = ingestion.video_id
         cached_video = ingestion.video
         indexing_started = perf_counter()
@@ -185,14 +190,32 @@ class VideoService:
             video_id, cached_video.metadata, cached_video.transcript
         )
         transcript_index_sec = perf_counter() - indexing_started
+        logger.bind(event="service.transcript_index.complete", video_id=video_id).debug(
+            "state={} chunks={} elapsed_sec={:.3f}",
+            indexing.state,
+            indexing.chunk_count,
+            transcript_index_sec,
+        )
         summary_started = perf_counter()
         summary = self._summary_stage.sync(
             video_id, cached_video.metadata, cached_video.transcript
         )
         summary_sec = perf_counter() - summary_started
+        logger.bind(event="service.summary.complete", video_id=video_id).debug(
+            "state={} elapsed_sec={:.3f}", summary.state, summary_sec
+        )
         vision_started = perf_counter()
         vision = self._vision_stage.sync(video_id, cached_video.metadata)
         vision_sec = perf_counter() - vision_started
+        logger.bind(event="service.vision.complete", video_id=video_id).debug(
+            "state={} scenes={} elapsed_sec={:.3f}",
+            vision.state,
+            vision.scene_count,
+            vision_sec,
+        )
+        logger.bind(event="service.process.complete", video_id=video_id).debug(
+            "elapsed_sec={:.3f}", perf_counter() - total_started
+        )
         return ProcessResult(
             video_id=video_id,
             cache_hit=ingestion.cache_hit,
@@ -211,15 +234,20 @@ class VideoService:
 
     def list_statuses(self) -> list[VideoStatus]:
         """Return status for every locally cached video."""
-        return [
+        statuses = [
             self._video_status(status) for status in self._cache.list_cached_videos()
         ]
+        logger.bind(event="service.status.list").debug(
+            "cached_videos={}", len(statuses)
+        )
+        return statuses
 
     def get_status(self, video_id: str) -> VideoStatus:
         """Return one cached video's status or raise a service-level error."""
         status = self._cache.get_video_status(video_id)
         if status is None:
             raise VideoNotFoundError(f"Video '{video_id}' not found in local cache.")
+        logger.bind(event="service.status.get", video_id=video_id).debug("loaded")
         return self._video_status(status)
 
     def get_summary(self, video_id: str, *, generate: bool = False) -> SummaryResult:
@@ -235,6 +263,9 @@ class VideoService:
             language=self._summary_language,
         )
         if status.state == CacheState.CURRENT and status.entry is not None:
+            logger.bind(event="service.summary.cache", video_id=video_id).debug(
+                "state=current"
+            )
             return SummaryResult(state=SyncState.CURRENT, summary=status.entry.summary)
         if not generate:
             raise SummaryUnavailableError(
@@ -243,6 +274,9 @@ class VideoService:
             )
         result = self._summary_stage.sync(
             video_id, cached_video.metadata, cached_video.transcript
+        )
+        logger.bind(event="service.summary.generate", video_id=video_id).debug(
+            "state={}", result.state
         )
         if result.state == "warning":
             raise SummaryGenerationError(result.warning or "Failed to generate summary")

@@ -89,6 +89,7 @@ def _summary_provider_factory(config: Settings) -> Callable[[], SummaryProvider]
     return lambda: GeminiSummaryProvider(
         api_key=config.gemini_api_key,
         model=config.summary_model,
+        prompt_version=config.summary_prompt_version,
     )
 
 
@@ -97,6 +98,7 @@ def _vision_analyzer_factory(config: Settings) -> Callable[[], VisionAnalyzer]:
     return lambda: GeminiVisionAnalyzer(
         api_key=config.gemini_api_key,
         model=config.vision_model,
+        prompt_version=config.vision_prompt_version,
     )
 
 
@@ -115,5 +117,7 @@ def _vision_repository_factory(
 def _chat_provider_factory(config: Settings) -> Callable[[], ChatProvider]:
     """Build the configured grounded-answer provider lazily."""
     return lambda: GeminiChatProvider(
-        api_key=config.gemini_api_key, model=config.llm_model
+        api_key=config.gemini_api_key,
+        model=config.llm_model,
+        prompt_version=config.chat_prompt_version,
     )

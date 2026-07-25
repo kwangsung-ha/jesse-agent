@@ -5,6 +5,7 @@ description = "YouTube Video Intelligence Agent (CLI & Multimodal RAG)"
 authors = ["TubeTalk Team"]
 readme = "docs/README.md"
 packages = [{ include = "tubetalk" }]
+include = ["tubetalk/prompts/**/*.txt"]
 
 
 [tool.pyright]
@@ -25,6 +26,7 @@ google-genai = "*"
 chromadb = "*"
 yt-dlp = "*"
 youtube-transcript-api = "*"
+loguru = "^0.7.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

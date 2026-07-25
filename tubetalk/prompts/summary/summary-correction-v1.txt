@@ -1,0 +1,3 @@
+$prompt
+
+Validation feedback: a chapter start_sec of $start_sec was outside the valid range 0.0 through $last_timestamp. Return a complete corrected JSON response with every chapter timestamp inside that range.

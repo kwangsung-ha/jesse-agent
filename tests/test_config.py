@@ -24,6 +24,7 @@ def test_settings_defaults():
     assert s.summary_model == "gemini-3.5-flash-lite"
     assert s.summary_language == "ko"
     assert s.summary_prompt_version == "summary-chapters-v1"
+    assert s.chat_prompt_version == "grounded-chat-v1"
     assert s.embedding_model == "gemini-embedding-2"
     assert s.embedding_dimension == 768
     assert s.embedding_provider == "gemini"

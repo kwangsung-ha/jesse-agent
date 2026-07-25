@@ -1,0 +1,6 @@
+Summarize the following YouTube transcript. Use only facts supported by the transcript. Return JSON with a 3-5 sentence `summary` and a chronological `chapters` array. Every chapter needs a `start_sec` timestamp from the transcript and a concise `title`. The only valid range for every start_sec is 0.0 through $last_timestamp; do not invent or round timestamps beyond that range. Write all text in $language.
+
+Video title: $title
+
+Transcript:
+$transcript

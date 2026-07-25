@@ -8,6 +8,8 @@ from google import genai
 from google.genai.errors import APIError
 from httpx import HTTPError
 
+from tubetalk.core.logging import logger
+from tubetalk.core.prompts import PromptCatalog, PromptTemplateError
 from tubetalk.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
 from tubetalk.ports.vision import VisionProviderError
 
@@ -20,11 +22,15 @@ class GeminiVisionAnalyzer:
         api_key: str,
         model: str = "gemini-3.5-flash",
         client: Optional[Any] = None,
+        prompt_version: str = "vision-scenes-v2-30s",
+        prompts: PromptCatalog | None = None,
     ) -> None:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required to analyze video scenes")
         self.model = model
         self._client = client or genai.Client(api_key=api_key)
+        self._prompt_version = prompt_version
+        self._prompts = prompts or PromptCatalog()
 
     def describe(
         self, source: VisionSource, *, title: str, duration_sec: float
@@ -38,13 +44,22 @@ class GeminiVisionAnalyzer:
             raise VisionProviderError(
                 "Video duration must be positive for scene coverage"
             )
-        return _parse_response(
-            self._generate(source, _vision_prompt(title, duration_sec)), duration_sec
-        )
+        try:
+            prompt = self._prompts.render(
+                "vision",
+                self._prompt_version,
+                {"title": title, "duration_sec": f"{duration_sec:.3f}"},
+            )
+        except PromptTemplateError as error:
+            raise VisionProviderError(str(error)) from error
+        return _parse_response(self._generate(source, prompt), duration_sec)
 
     def _generate(self, source: YouTubeUrlVisionSource, prompt: str) -> Any:
+        logger.bind(event="gemini.vision.request", model=self.model).debug(
+            "source={}\n--- prompt ---\n{}\n--- end prompt ---", source.url, prompt
+        )
         try:
-            return self._client.interactions.create(
+            response = self._client.interactions.create(
                 model=self.model,
                 input=[
                     {"type": "video", "uri": source.url},
@@ -56,20 +71,12 @@ class GeminiVisionAnalyzer:
                     "schema": _response_schema(),
                 },
             )
+            logger.bind(event="gemini.vision.response", model=self.model).trace(
+                "{}", str(getattr(response, "output_text", response))
+            )
+            return response
         except (APIError, HTTPError) as error:
             raise VisionProviderError(str(error)) from error
-
-
-def _vision_prompt(title: str, duration_sec: float) -> str:
-    return (
-        "Analyze this public YouTube video visually. Return chronological scenes "
-        f"that cover every moment from 0 through {duration_sec:.3f} seconds. "
-        "Each scene must satisfy 0 <= start_sec < end_sec <= video duration, be "
-        "no longer than 30 seconds, contiguous with its neighbors, and use exact "
-        "video-supported timestamps. Include visual "
-        "objects, people, text, charts, or actions; do not summarize speech unless "
-        f"it is visibly shown. Video title: {title}"
-    )
 
 
 def _response_schema() -> dict[str, Any]:

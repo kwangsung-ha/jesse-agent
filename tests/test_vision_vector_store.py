@@ -147,6 +147,19 @@ def test_index_status_detects_current_stale_missing_and_invalid_indexes(
     assert invalid.state == "invalid"
 
 
+def test_needs_indexing_uses_the_logged_vision_index_status(
+    tmp_path: Path, mocker: Any
+) -> None:
+    """The sync helper mirrors the current/stale status decision."""
+    store, _, collection = _make_store(tmp_path, mocker)
+    scenes = _scenes()
+    store.index_scenes(scenes, "Example", FakeEmbeddingProvider())
+    collection.count.return_value = len(scenes)
+
+    assert store.needs_indexing(scenes) is False
+    assert store.needs_indexing((VisionScene(0, 5, "Changed", ()),)) is True
+
+
 def test_index_scenes_rejects_wrong_provider_shape(tmp_path: Path, mocker: Any) -> None:
     """Vectors from another configured space cannot enter the collection."""
     store, _, _ = _make_store(tmp_path, mocker)

@@ -7,6 +7,7 @@ from typing import Optional
 
 from chromadb.errors import ChromaError
 
+from tubetalk.core.logging import logger
 from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
@@ -57,7 +58,11 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
 
     def needs_indexing(self, transcript: Transcript) -> bool:
         """Return whether the local index differs from its source transcript."""
-        return self.get_index_status(transcript).state != "current"
+        status = self.get_index_status(transcript)
+        logger.bind(event="chroma.transcript.status", video_id=self.video_id).debug(
+            "state={}", status.state
+        )
+        return status.state != "current"
 
     def get_index_status(
         self, transcript: Optional[Transcript]
@@ -153,6 +158,9 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
             raise TranscriptIndexRepositoryError(str(error)) from error
         self._collection = generation
         self._retire_collection(previous_collection)
+        logger.bind(event="chroma.transcript.index", video_id=self.video_id).debug(
+            "chunks={} collection={}", len(chunks), generation_name
+        )
         return len(chunks)
 
     def search(self, query_embedding: list[float], limit: int) -> list[RetrievalHit]:
@@ -172,7 +180,7 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
             documents = result["documents"][0]
             metadatas = result["metadatas"][0]
             distances = result["distances"][0]
-            return [
+            hits = [
                 RetrievalHit(
                     source_id=str(item_id),
                     source="transcript",
@@ -186,6 +194,10 @@ class ChromaTranscriptIndexRepository(ChromaVectorRepositoryBase):
                     zip(ids, documents, metadatas, distances), start=1
                 )
             ]
+            logger.bind(event="chroma.transcript.search", video_id=self.video_id).debug(
+                "limit={} hits={}", limit, len(hits)
+            )
+            return hits
         except (ChromaError, OSError, KeyError, TypeError, ValueError) as error:
             raise TranscriptIndexRepositoryError(str(error)) from error
 

@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from tubetalk.core.logging import logger
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
@@ -74,9 +75,11 @@ class LocalCacheManager:
     def has_cache(self, video_id: str) -> bool:
         """Check whether both ``metadata.json`` and ``transcript.json`` exist."""
         video_dir = self._data_dir / video_id
-        return (video_dir / "metadata.json").is_file() and (
+        exists = (video_dir / "metadata.json").is_file() and (
             video_dir / "transcript.json"
         ).is_file()
+        logger.bind(event="cache.check", video_id=video_id).debug("hit={}", exists)
+        return exists
 
     # ------------------------------------------------------------------
     # JSON persistence
@@ -87,11 +90,14 @@ class LocalCacheManager:
         video_dir = self.get_video_dir(video_id)
         filepath = video_dir / filename
         _atomic_write_json(filepath, data)
+        logger.bind(event="cache.save", video_id=video_id).debug("file={}", filename)
 
     def load_json(self, video_id: str, filename: str) -> Any:
         """Deserialize and return content of ``data/{video_id}/{filename}``."""
         filepath = self._data_dir / video_id / filename
-        return json.loads(filepath.read_text())
+        data = json.loads(filepath.read_text())
+        logger.bind(event="cache.load", video_id=video_id).debug("file={}", filename)
+        return data
 
     def save_video(self, video: CachedVideo) -> None:
         """Persist the typed resources required for a reusable video cache."""
@@ -149,11 +155,18 @@ class LocalCacheManager:
         """Return whether a cached summary matches its transcript and settings."""
         summary_path = self._data_dir / video_id / "summary.json"
         if not summary_path.is_file():
+            logger.bind(event="cache.summary.status", video_id=video_id).debug(
+                "state=missing"
+            )
             return SummaryCacheStatus(state=CacheState.MISSING)
         try:
             entry = _summary_cache_entry(json.loads(summary_path.read_text()))
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return SummaryCacheStatus(state=CacheState.INVALID)
+            status = SummaryCacheStatus(state=CacheState.INVALID)
+            logger.bind(event="cache.summary.status", video_id=video_id).debug(
+                "state=invalid"
+            )
+            return status
         manifest = entry.manifest
         if (
             manifest.transcript_sha256 != transcript_sha256(transcript)
@@ -161,8 +174,13 @@ class LocalCacheManager:
             or manifest.prompt_version != prompt_version
             or manifest.language != language
         ):
-            return SummaryCacheStatus(state=CacheState.STALE, entry=entry)
-        return SummaryCacheStatus(state=CacheState.CURRENT, entry=entry)
+            state = CacheState.STALE
+        else:
+            state = CacheState.CURRENT
+        logger.bind(event="cache.summary.status", video_id=video_id).debug(
+            "state={}", state
+        )
+        return SummaryCacheStatus(state=state, entry=entry)
 
     def save_vision_index(self, video_id: str, entry: VisionIndexEntry) -> None:
         """Persist generated visual scenes and their generation provenance."""
@@ -198,19 +216,31 @@ class LocalCacheManager:
         """Return whether a visual index matches its source and settings."""
         vision_path = self._data_dir / video_id / "vision_index.json"
         if not vision_path.is_file():
+            logger.bind(event="cache.vision.status", video_id=video_id).debug(
+                "state=missing"
+            )
             return VisionIndexStatus(state=CacheState.MISSING)
         try:
             entry = _vision_index_entry(json.loads(vision_path.read_text()))
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return VisionIndexStatus(state=CacheState.INVALID)
+            status = VisionIndexStatus(state=CacheState.INVALID)
+            logger.bind(event="cache.vision.status", video_id=video_id).debug(
+                "state=invalid"
+            )
+            return status
         manifest = entry.manifest
         if (
             manifest.source_url != source_url
             or manifest.model != model
             or manifest.prompt_version != prompt_version
         ):
-            return VisionIndexStatus(state=CacheState.STALE, entry=entry)
-        return VisionIndexStatus(state=CacheState.CURRENT, entry=entry)
+            state = CacheState.STALE
+        else:
+            state = CacheState.CURRENT
+        logger.bind(event="cache.vision.status", video_id=video_id).debug(
+            "state={}", state
+        )
+        return VisionIndexStatus(state=state, entry=entry)
 
     # ------------------------------------------------------------------
     # Listing / status helpers

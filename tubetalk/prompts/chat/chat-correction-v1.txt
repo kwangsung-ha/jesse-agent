@@ -1,0 +1,3 @@
+$prompt
+
+Validation feedback: $validation_feedback

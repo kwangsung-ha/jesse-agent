@@ -9,6 +9,7 @@ from typing import Optional
 from chromadb.errors import ChromaError
 from pydantic import BaseModel, ConfigDict
 
+from tubetalk.core.logging import logger
 from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.vision import VisionScene
@@ -61,7 +62,11 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
             raise VisionIndexRepositoryError(str(error)) from error
 
     def needs_indexing(self, scenes: tuple[VisionScene, ...]) -> bool:
-        return self.get_index_status(scenes).state != "current"
+        status = self.get_index_status(scenes)
+        logger.bind(event="chroma.vision.status", video_id=self.video_id).debug(
+            "state={}", status.state
+        )
+        return status.state != "current"
 
     def get_index_status(
         self, scenes: Optional[tuple[VisionScene, ...]]
@@ -149,6 +154,9 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
             raise VisionIndexRepositoryError(str(error)) from error
         self._collection = generation
         self._retire_collection(previous_collection)
+        logger.bind(event="chroma.vision.index", video_id=self.video_id).debug(
+            "scenes={} collection={}", len(scenes), generation_name
+        )
         return len(scenes)
 
     def search(self, query_embedding: list[float], limit: int) -> list[RetrievalHit]:
@@ -168,7 +176,7 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
             documents = result["documents"][0]
             metadatas = result["metadatas"][0]
             distances = result["distances"][0]
-            return [
+            hits = [
                 RetrievalHit(
                     source_id=str(item_id),
                     source="vision",
@@ -182,6 +190,10 @@ class ChromaVisionIndexRepository(ChromaVectorRepositoryBase):
                     zip(ids, documents, metadatas, distances), start=1
                 )
             ]
+            logger.bind(event="chroma.vision.search", video_id=self.video_id).debug(
+                "limit={} hits={}", limit, len(hits)
+            )
+            return hits
         except (ChromaError, OSError, KeyError, TypeError, ValueError) as error:
             raise VisionIndexRepositoryError(str(error)) from error
 

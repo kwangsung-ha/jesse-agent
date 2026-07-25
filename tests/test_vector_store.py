@@ -204,6 +204,7 @@ def test_needs_indexing_detects_current_and_stale_transcripts(
     provider = FakeEmbeddingProvider()
     segments = _transcript((0, 0, "Hello"))
 
+    assert store.needs_indexing(segments) is True
     store.index_transcript(segments, "Example", provider)
     collection.count.return_value = 1
     assert store.needs_indexing(segments) is False

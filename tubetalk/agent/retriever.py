@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 
+from tubetalk.core.logging import logger
 from tubetalk.domain.retrieval import RetrievalHit
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.transcript import Transcript
@@ -73,7 +74,17 @@ class HybridRetriever:
         fused = _rrf_fuse(transcript_hits, vision_hits)
         if not fused:
             raise HybridRetrievalError("No indexed evidence was found for this video")
-        return tuple(fused[:RETRIEVAL_LIMIT])
+        selected = tuple(fused[:RETRIEVAL_LIMIT])
+        logger.bind(event="retrieval.complete").debug(
+            "query={}\n{}",
+            query,
+            "\n".join(
+                f"{hit.source_id} source={hit.source} interval="
+                f"{hit.start_sec:.3f}-{hit.end_sec:.3f} score={hit.score:.5f}"
+                for hit in selected
+            ),
+        )
+        return selected
 
 
 def _rrf_fuse(*ranked_lists: Iterable[RetrievalHit]) -> list[RetrievalHit]:

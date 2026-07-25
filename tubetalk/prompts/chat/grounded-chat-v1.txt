@@ -1,0 +1,9 @@
+Answer the user's question using only the evidence below. Respond in JSON. Give a concise answer and at least one citation. Every citation source_id must exactly match an evidence id, and timestamp_sec must be inside that evidence interval. Do not invent facts or citations.
+
+Conversation history:
+$history
+
+Evidence:
+$evidence
+
+Question: $question

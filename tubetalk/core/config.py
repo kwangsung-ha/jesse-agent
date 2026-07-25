@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     summary_model: str = "gemini-3.5-flash-lite"
     summary_language: str = "ko"
     summary_prompt_version: str = "summary-chapters-v1"
+    chat_prompt_version: str = "grounded-chat-v1"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = 768
     embedding_provider: Literal["gemini"] = "gemini"

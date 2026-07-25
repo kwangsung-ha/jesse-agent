@@ -44,3 +44,8 @@
   - [x] `tubetalk status [video_id]`
   - [x] `tubetalk summary [video_id]` 및 `--generate`
   - [x] `tubetalk chat [video_id]` (멀티턴 대화형 Q&A, ID 생략 시 목록 선택)
+
+## Phase 4: 관찰 가능성 및 프롬프트 엔지니어링
+- [x] **Task 08: Debug Trace & Versioned Prompt Catalog** `docs/tasks/08-debug-prompt-engineering.md`
+  - 전역 `--debug`, `--verbose`로 실행 단계·검색 근거·Gemini 요청/응답을 관찰
+  - 요약·비전·채팅 프롬프트의 버전 파일 관리 및 환경 변수 기반 선택

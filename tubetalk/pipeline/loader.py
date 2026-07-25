@@ -8,6 +8,7 @@ from typing import Any, Optional
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import YouTubeTranscriptApiException
 
+from tubetalk.core.logging import logger
 from tubetalk.domain.transcript import Transcript, TranscriptSegment
 from tubetalk.domain.video import VideoMetadata
 
@@ -43,7 +44,9 @@ class YouTubeLoader:
         match = _YOUTUBE_RE.search(url)
         if not match:
             raise InvalidVideoUrlError(f"Cannot extract video_id from URL: {url}")
-        return match.group("id")
+        video_id = match.group("id")
+        logger.bind(event="loader.video_id", video_id=video_id).debug("parsed URL")
+        return video_id
 
     # ------------------------------------------------------------------
     # Transcript
@@ -64,7 +67,7 @@ class YouTubeLoader:
         try:
             ytt_api = YouTubeTranscriptApi()
             transcript = ytt_api.fetch(video_id, languages=languages)
-            return Transcript(
+            loaded = Transcript(
                 segments=tuple(
                     TranscriptSegment(
                         start_sec=round(seg.start, 3),
@@ -74,6 +77,10 @@ class YouTubeLoader:
                     for seg in transcript
                 )
             )
+            logger.bind(event="loader.transcript", video_id=video_id).debug(
+                "segments={} languages={}", len(loaded), languages
+            )
+            return loaded
         except (YouTubeTranscriptApiException, ValueError) as error:
             raise VideoLoaderError(
                 f"Failed to fetch transcript for {video_id}: {error}"
@@ -103,7 +110,7 @@ class YouTubeLoader:
                 check=True,
             )
             info: dict[str, Any] = json.loads(result.stdout)
-            return VideoMetadata(
+            metadata = VideoMetadata(
                 video_id=video_id,
                 source_url=url,
                 title=_optional_text(info.get("title")),
@@ -113,6 +120,10 @@ class YouTubeLoader:
                 view_count=_optional_int(info.get("view_count")),
                 thumbnail_url=_optional_text(info.get("thumbnail")),
             )
+            logger.bind(event="loader.metadata", video_id=video_id).debug(
+                "duration_sec={} title={}", metadata.duration_sec, metadata.title
+            )
+            return metadata
         except (
             json.JSONDecodeError,
             OSError,

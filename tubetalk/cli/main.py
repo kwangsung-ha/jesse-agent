@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from tubetalk.bootstrap import create_video_service
+from tubetalk.core.logging import configure_debug_logging
 from tubetalk.domain.summary import VideoSummary
 from tubetalk.services.video_service import (
     ChatGenerationError,
@@ -30,8 +31,25 @@ console = Console()
 
 
 @app.callback()
-def main() -> None:
+def main(
+    debug: bool = typer.Option(
+        False, "--debug", help="Show diagnostic execution logs."
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Include raw model responses in debug logs (requires --debug).",
+    ),
+) -> None:
     """Configure the TubeTalk command group."""
+    if verbose and not debug:
+        raise typer.BadParameter("--verbose requires --debug", param_hint="--verbose")
+    configure_debug_logging(debug=debug, verbose=verbose)
+
+
+def _service():
+    """Build a service with this invocation's diagnostic reporter."""
+    return create_video_service()
 
 
 @app.command()
@@ -39,7 +57,7 @@ def status(
     video_id: Optional[str] = typer.Argument(default=None),
 ) -> None:
     """Show local cache status for all or a specific video."""
-    service = create_video_service()
+    service = _service()
     if video_id is None:
         _show_all(service.list_statuses())
         return
@@ -53,7 +71,7 @@ def status(
 @app.command()
 def process(url: str = typer.Argument(..., metavar="YOUTUBE_URL")) -> None:
     """Fetch a video's data, cache it, and synchronise its text index."""
-    service = create_video_service()
+    service = _service()
     _process_log("Processing video data…")
     try:
         result = service.process(url)
@@ -95,7 +113,7 @@ def show_summary(
     ),
 ) -> None:
     """Display a cached transcript summary and its timestamp chapters."""
-    service = create_video_service()
+    service = _service()
     if video_id is None:
         video_id = _select_summary_video(service.list_statuses())
     try:
@@ -118,7 +136,7 @@ def show_summary(
 @app.command()
 def chat(video_id: Optional[str] = typer.Argument(default=None)) -> None:
     """Ask grounded questions about a cached video in a multi-turn session."""
-    service = create_video_service()
+    service = _service()
     if video_id is None:
         video_id = _select_summary_video(service.list_statuses())
     try:

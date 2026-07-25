@@ -40,6 +40,12 @@ def test_create_video_service_selects_gemini_and_chroma(
         chunk_policy=TranscriptChunkPolicy(max_seconds=45.0, max_characters=1200),
     )
     summary_provider.assert_called_once_with(
-        api_key="key", model="gemini-3.5-flash-lite"
+        api_key="key",
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
     )
-    vision_analyzer.assert_called_once_with(api_key="key", model="gemini-3.5-flash")
+    vision_analyzer.assert_called_once_with(
+        api_key="key",
+        model="gemini-3.5-flash",
+        prompt_version="vision-scenes-v2-30s",
+    )

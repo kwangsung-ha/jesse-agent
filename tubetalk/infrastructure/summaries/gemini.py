@@ -8,6 +8,8 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
+from tubetalk.core.logging import logger
+from tubetalk.core.prompts import PromptCatalog, PromptTemplateError
 from tubetalk.domain.summary import Chapter, VideoSummary
 from tubetalk.domain.transcript import Transcript
 from tubetalk.ports.summary import SummaryProviderError
@@ -21,12 +23,16 @@ class GeminiSummaryProvider:
         api_key: str,
         model: str = "gemini-3.5-flash-lite",
         client: Optional[Any] = None,
+        prompt_version: str = "summary-chapters-v1",
+        prompts: PromptCatalog | None = None,
     ) -> None:
         """Create a summary provider using the configured Gemini model."""
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required to generate summaries")
         self.model = model
         self._client = client or genai.Client(api_key=api_key)
+        self._prompt_version = prompt_version
+        self._prompts = prompts or PromptCatalog()
 
     def generate_summary(
         self,
@@ -36,13 +42,13 @@ class GeminiSummaryProvider:
         language: str,
     ) -> VideoSummary:
         """Generate and validate a structured summary from the transcript."""
-        prompt, last_timestamp = _summary_prompt(transcript, title, language)
+        prompt, last_timestamp = self._summary_prompt(transcript, title, language)
         response = self._generate_content(prompt)
         try:
             return _parse_response(response, last_timestamp)
         except ChapterTimestampOutOfRangeError as error:
             corrected_response = self._generate_content(
-                _correction_prompt(prompt, error)
+                self._correction_prompt(prompt, error)
             )
             try:
                 return _parse_response(corrected_response, last_timestamp)
@@ -54,8 +60,11 @@ class GeminiSummaryProvider:
 
     def _generate_content(self, prompt: str) -> Any:
         """Request one structured response from Gemini."""
+        logger.bind(event="gemini.summary.request", model=self.model).debug(
+            "--- prompt ---\n{}\n--- end prompt ---", prompt
+        )
         try:
-            return self._client.models.generate_content(
+            response = self._client.models.generate_content(
                 model=self.model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
@@ -80,44 +89,58 @@ class GeminiSummaryProvider:
                     },
                 ),
             )
+            logger.bind(event="gemini.summary.response", model=self.model).trace(
+                "{}", _response_text(response)
+            )
+            return response
         except (APIError, HTTPError) as error:
             raise SummaryProviderError(str(error)) from error
 
+    def _summary_prompt(
+        self, transcript: Transcript, title: str, language: str
+    ) -> tuple[str, float]:
+        if not transcript:
+            raise SummaryProviderError("Cannot summarize an empty transcript")
+        lines: list[str] = []
+        last_timestamp = 0.0
+        for segment in transcript.segments:
+            last_timestamp = max(last_timestamp, segment.end_sec)
+            lines.append(f"[{_timestamp(segment.start_sec)}] {segment.text.strip()}")
+        try:
+            prompt = self._prompts.render(
+                "summary",
+                self._prompt_version,
+                {
+                    "last_timestamp": f"{last_timestamp:.3f}",
+                    "language": language,
+                    "title": title,
+                    "transcript": "\n".join(lines),
+                },
+            )
+        except PromptTemplateError as error:
+            raise SummaryProviderError(str(error)) from error
+        return prompt, last_timestamp
 
-def _summary_prompt(
-    transcript: Transcript, title: str, language: str
-) -> tuple[str, float]:
-    """Build the grounded prompt and find the final valid transcript timestamp."""
-    if not transcript:
-        raise SummaryProviderError("Cannot summarize an empty transcript")
-    lines: list[str] = []
-    last_timestamp = 0.0
-    for segment in transcript.segments:
-        start = segment.start_sec
-        end = segment.end_sec
-        last_timestamp = max(last_timestamp, end)
-        lines.append(f"[{_timestamp(start)}] {segment.text.strip()}")
-    prompt = (
-        "Summarize the following YouTube transcript. Use only facts supported by "
-        "the transcript. Return JSON with a 3-5 sentence `summary` and a "
-        "chronological `chapters` array. Every chapter needs a `start_sec` "
-        "timestamp from the transcript and a concise `title`. The only valid "
-        f"range for every start_sec is 0.0 through {last_timestamp:.3f}; do not "
-        "invent or round timestamps beyond that range. "
-        f"Write all text in {language}.\n\n"
-        f"Video title: {title}\n\nTranscript:\n" + "\n".join(lines)
-    )
-    return prompt, last_timestamp
+    def _correction_prompt(
+        self, prompt: str, error: "ChapterTimestampOutOfRangeError"
+    ) -> str:
+        try:
+            return self._prompts.render(
+                "summary_correction",
+                "summary-correction-v1",
+                {
+                    "prompt": prompt,
+                    "start_sec": f"{error.start_sec:.3f}",
+                    "last_timestamp": f"{error.last_timestamp:.3f}",
+                },
+            )
+        except PromptTemplateError as template_error:
+            raise SummaryProviderError(str(template_error)) from template_error
 
 
-def _correction_prompt(prompt: str, error: "ChapterTimestampOutOfRangeError") -> str:
-    """Request a complete corrected response after timestamp validation fails."""
-    return (
-        f"{prompt}\n\nValidation feedback: a chapter start_sec of "
-        f"{error.start_sec:.3f} was outside the valid range 0.0 through "
-        f"{error.last_timestamp:.3f}. Return a complete corrected JSON response "
-        "with every chapter timestamp inside that range."
-    )
+def _response_text(response: Any) -> str:
+    """Extract model text for verbose diagnostics without assuming SDK details."""
+    return str(getattr(response, "text", response))
 
 
 def _parse_response(response: Any, last_timestamp: float) -> VideoSummary:

@@ -48,6 +48,12 @@ export GEMINI_API_KEY=your_api_key
 
 ```bash
 poetry run tubetalk process 'https://www.youtube.com/watch?v=VIDEO_ID'
+
+# 단계, 프롬프트, 검색 근거를 stderr로 확인
+poetry run tubetalk --debug process 'https://www.youtube.com/watch?v=VIDEO_ID'
+
+# 모델 원본 응답까지 확인
+poetry run tubetalk --debug --verbose process 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
 
 처리 시 `data/<video_id>/`에 메타데이터와 자막을 캐시하고, 가능한 경우 다음을
@@ -119,8 +125,13 @@ poetry run tubetalk --help
 | `VISION_MODEL` | `gemini-3.5-flash` | 영상 장면 분석 모델 |
 | `EMBEDDING_MODEL` | `gemini-embedding-2` | 텍스트/비전 설명 임베딩 모델 |
 | `SUMMARY_LANGUAGE` | `ko` | 요약 및 목차 언어 |
+| `SUMMARY_PROMPT_VERSION` | `summary-chapters-v1` | 자막 요약 템플릿 버전 |
+| `VISION_PROMPT_VERSION` | `vision-scenes-v2-30s` | 비전 장면 템플릿 버전 |
+| `CHAT_PROMPT_VERSION` | `grounded-chat-v1` | 대화 템플릿 버전 |
 
 전체 설정값은 [`tubetalk/core/config.py`](tubetalk/core/config.py)에서 확인할 수 있습니다.
+프롬프트는 `tubetalk/prompts/`의 버전 파일로 관리합니다. 템플릿을 변경할 때는 새 버전을
+추가하고 해당 환경 변수를 바꾸세요. 디버그 로그에는 자막·질문·근거가 포함될 수 있습니다.
 
 ## 로컬 데이터 구조
 

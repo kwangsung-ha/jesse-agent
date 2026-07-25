@@ -119,6 +119,18 @@ Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 �
 
 `chat`은 자막·비전 인덱스가 모두 최신일 때만 시작하며, 세션 기록은 디스크에 저장하지 않는다.
 
+### 디버그 관찰성 및 프롬프트
+
+Loguru는 CLI entry point에서 한 번만 설정되며, `tubetalk` 네임스페이스는 기본적으로
+비활성화된다. `tubetalk --debug <command>`는 stderr에 cache·loader·Chroma·서비스·검색
+단계와 렌더링된 Gemini 프롬프트를 기록한다. `--debug --verbose`는 TRACE 레벨의 원본 모델
+응답도 추가한다. 로그에는 API 키·임베딩 벡터·전체 자막 원문을 기록하지 않지만 프롬프트,
+질문, 검색 근거가 포함될 수 있으므로 진단 목적으로만 사용한다.
+
+`tubetalk/prompts/`는 요약·비전·채팅과 각 수정 요청의 버전별 템플릿을 제공한다.
+`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`은 기능별 템플릿을
+선택한다. 요약·비전의 선택 값은 기존 manifest `prompt_version` 최신성 판정에 사용한다.
+
 ## 6. 설정과 로컬 저장소
 
 주요 환경 변수는 `GEMINI_API_KEY`, `DATA_DIR`, `SUMMARY_MODEL`, `VISION_MODEL`,
