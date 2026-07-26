@@ -9,17 +9,19 @@ from rich.table import Table
 
 from tubetalk.bootstrap import create_video_service
 from tubetalk.core.logging import configure_debug_logging
+from tubetalk.domain.retrieval import Citation, RetrievalHit
 from tubetalk.domain.summary import VideoSummary
+from tubetalk.domain.video_status import VideoStatus
+from tubetalk.services.results import ProcessResult
 from tubetalk.services.video_service import (
     ChatGenerationError,
     ChatUnavailableError,
     InvalidVideoUrlError,
-    ProcessResult,
     SummaryGenerationError,
     SummaryUnavailableError,
     VideoIngestionError,
     VideoNotFoundError,
-    VideoStatus,
+    VideoService,
 )
 
 app = typer.Typer(
@@ -47,7 +49,7 @@ def main(
     configure_debug_logging(debug=debug, verbose=verbose)
 
 
-def _service():
+def _service() -> VideoService:
     """Build a service with this invocation's diagnostic reporter."""
     return create_video_service()
 
@@ -291,7 +293,9 @@ def _format_timestamp(start_sec: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def _show_chat_evidence(citations: tuple, evidence: tuple) -> None:
+def _show_chat_evidence(
+    citations: tuple[Citation, ...], evidence: tuple[RetrievalHit, ...]
+) -> None:
     """Render only evidence records cited by a validated chat response."""
     hits = {hit.source_id: hit for hit in evidence}
     table = Table(title="Citations", show_header=True)

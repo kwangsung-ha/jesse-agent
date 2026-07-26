@@ -14,8 +14,9 @@ poetry run poe check
 
 `poetry run poe check` 명령어는 아래 작업들을 일괄 수행합니다:
 1. **`poetry run poe format`** (또는 `format-check`): 코드 포맷팅 (Ruff)
-2. **`poetry run poe lint`**: 린팅 및 정적 타입 분석 (Ruff + Mypy)
-3. **`poetry run poe test`**: 유닛 테스트 실행 및 **커버리지 90% 이상** 통과 (`pytest --cov=tubetalk --cov-fail-under=90`)
+2. **`poetry run poe lint`**: Ruff 린팅
+3. **`poetry run poe static`**: Mypy strict 정적 타입 분석
+4. **`poetry run poe test`**: 유닛 테스트 실행 및 **커버리지 90% 이상** 통과 (`pytest --cov=tubetalk --cov-fail-under=90`)
 
 ---
 
@@ -43,4 +44,5 @@ poetry run poe check
 | `poetry run poe check` | **[필수]** 포맷 체크, 린트/정적 분석 및 90%+ 유닛 테스트 검증 |
 | `poetry run poe test` | 유닛 테스트 구동 및 커버리지 리포트 출력 |
 | `poetry run poe format` | Ruff 코드 포맷팅 자동 적용 |
-| `poetry run poe lint` | Ruff 린트 검사 및 Mypy 타입 검사 |
+| `poetry run poe lint` | Ruff 린트 검사 |
+| `poetry run poe static` | Mypy strict 정적 타입 검사 |

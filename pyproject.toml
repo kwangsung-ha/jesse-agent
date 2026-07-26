@@ -44,9 +44,10 @@ build-backend = "poetry.core.masonry.api"
 [tool.poe.tasks]
 format-check = "ruff format --check ."
 format = "ruff format ."
+static = "mypy --strict tubetalk"
 lint = "ruff check ."
 test = "pytest --cov=tubetalk --cov-report=term-missing --cov-fail-under=90"
-check = ["format-check", "lint", "test"]
+check = ["format-check", "lint", "static", "test"]
 
 [tool.ruff]
 line-length = 88

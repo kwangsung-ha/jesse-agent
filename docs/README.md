@@ -65,8 +65,9 @@ graph LR
 ### 3.1 필수 검증 커맨드 (`poetry run poe check`)
 * 모든 체크리스트 구현 항목 완료 시 **`poetry run poe check`** 명령어를 구동하여 아래 3가지 검증을 100% 통과해야 합니다:
   1. `poetry run poe format` (Ruff 코드 포맷 검사)
-  2. `poetry run poe lint` (Ruff 린트 및 Mypy 정적 분석)
-  3. `poetry run poe test` (Pytest 구동 및 **유닛 테스트 커버리지 90% 이상** 유지)
+  2. `poetry run poe lint` (Ruff 린트)
+  3. `poetry run poe static` (Mypy strict 정적 분석)
+  4. `poetry run poe test` (Pytest 구동 및 **유닛 테스트 커버리지 90% 이상** 유지)
 * 루트 디렉토리의 [AGENTS.md](file:///Users/jesse/work/tubetalk/AGENTS.md) 지침에 따라 모든 코딩 에이전트가 본 품질 규칙을 참조합니다.
 
 ### 3.2 테스트 작성 수칙 (Unit Test Principles)
@@ -84,4 +85,3 @@ graph LR
 
 ## 4. 새로운 세션 시작 시 조치 사항 (AI Agent Rules)
 * AI Agent는 새로운 작업 요청을 받거나 세션이 재시작될 때 먼저 [AGENTS.md](file:///Users/jesse/work/tubetalk/AGENTS.md), [docs/README.md](file:///Users/jesse/work/tubetalk/docs/README.md) 및 [docs/roadmap.md](file:///Users/jesse/work/tubetalk/docs/roadmap.md)를 확인하여 현재 진행 위치 및 품질 게이트 규칙을 파악해야 합니다.
-

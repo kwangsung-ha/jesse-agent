@@ -91,7 +91,7 @@ class ChatSession:
         self._cached_video = cached_video
         self._scenes = scenes
         self._history: list[ChatTurn] = []
-        self._last_evidence = ()
+        self._last_evidence: tuple[RetrievalHit, ...] = ()
 
     @property
     def last_evidence(self) -> tuple[RetrievalHit, ...]:

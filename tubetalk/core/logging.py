@@ -4,6 +4,8 @@ import sys
 
 from loguru import logger
 
+__all__ = ["configure_debug_logging", "logger"]
+
 _FORMAT = (
     "<dim>{time:HH:mm:ss}</dim> | <level>{level:<5}</level> | "
     "<cyan>{extra[event]}</cyan> | {message}"

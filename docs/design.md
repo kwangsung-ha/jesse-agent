@@ -66,11 +66,19 @@ tubetalk/
 ├── core/
 │   ├── cache.py                    # JSON cache와 freshness 상태
 │   └── config.py                   # Pydantic Settings
-├── domain/                         # summary, vision, index, status models
+│   ├── logging.py                  # CLI debug logging
+│   └── prompts.py                  # versioned prompt catalog
+├── agent/retriever.py              # dual retrieval and RRF fusion
+├── domain/                         # transcript, summary, vision, retrieval, status models
 ├── ports/                          # provider/repository protocol 및 오류 경계
 ├── pipeline/loader.py              # YouTube URL, metadata, transcript collection
-├── services/video_service.py       # application use cases와 단계 조율
+├── prompts/                        # versioned summary, vision, chat templates
+├── services/
+│   ├── video_service.py            # application use cases와 ChatSession
+│   ├── stages.py                   # independent processing stages
+│   └── results.py                  # typed use-case results
 └── infrastructure/
+    ├── chats/gemini.py             # grounded chat adapter
     ├── embeddings/gemini.py        # Gemini Embedding 2 adapter
     ├── summaries/gemini.py         # structured transcript-summary adapter
     ├── visions/gemini.py           # public YouTube URL scene analyzer
@@ -96,13 +104,13 @@ Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 �
 
 ### 자막 요약
 
-- `GeminiSummaryProvider`는 자막 전체를 시간 표기와 함께 전달하고 JSON 형식의 요약·목차를 요청한다.
+- `GeminiSummaryProvider`는 자막 전체를 시간 표기와 함께 전달하고 JSON 형식의 3~5문장 요약·목차를 요청한다. 응답은 비어 있지 않은 요약과 시간순 목차로 검증하며, 요약 문장 수는 강제하지 않는다.
 - `summary.json` manifest는 자막 SHA-256, 모델, 프롬프트 버전, 언어, 생성 시각을 보관한다.
 - 모델이 범위를 벗어난 목차 시간을 반환하면 한 번의 수정 요청 후 다시 검증한다.
 
 ### 비전 장면과 벡터 인덱스
 
-- `GeminiVisionAnalyzer`는 공개 YouTube URL을 비디오 입력으로 Gemini에 전달한다. 장면은 전체 길이를 덮는 시간순 구간으로 요청한다.
+- `GeminiVisionAnalyzer`는 공개 YouTube URL을 비디오 입력으로 Gemini에 전달한다. 장면은 전체 길이를 덮는 시간순 구간으로 요청하며, 응답 시간은 영상 길이 안으로 보정하고 시작 시간순으로 정렬한다. 장면 간 공백 없는 전체 커버리지는 검증하지 않는다.
 - `vision_index.json`에는 장면과 source URL, 모델, 프롬프트 버전, 스키마 버전, 생성 시각이 저장된다.
 - 자막은 `transcript_collection`, 장면 설명은 `vision_collection`에 명시적 벡터로 저장한다. 두 컬렉션 모두 영상별 `chromadb/` 경로에 있으며 cosine 거리를 사용한다.
 - 각 컬렉션의 manifest는 원본 해시, 임베딩 모델·차원, 레코드 수, 인덱싱 시각을 기록해 current/stale/invalid/missing 상태를 판정한다.
@@ -117,15 +125,15 @@ Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 �
 | `tubetalk summary <video_id> --generate` | 요약이 없거나 stale이면 생성 |
 | `tubetalk chat [video_id]` | 자막·비전 근거를 융합해 멀티턴 Q&A. ID 생략 시 캐시 영상 선택 |
 
-`chat`은 자막·비전 인덱스가 모두 최신일 때만 시작하며, 세션 기록은 디스크에 저장하지 않는다.
+`chat`은 완전한 원본 캐시와 파싱 가능한 비전 씬 엔트리가 있으면 세션을 시작한다. 각 질문 전에 자막·비전 벡터 인덱스가 모두 최신인지 확인하며, 최신이 아니면 질문을 거부한다. 세션 기록은 디스크에 저장하지 않는다.
 
 ### 디버그 관찰성 및 프롬프트
 
 Loguru는 CLI entry point에서 한 번만 설정되며, `tubetalk` 네임스페이스는 기본적으로
 비활성화된다. `tubetalk --debug <command>`는 stderr에 cache·loader·Chroma·서비스·검색
 단계와 렌더링된 Gemini 프롬프트를 기록한다. `--debug --verbose`는 TRACE 레벨의 원본 모델
-응답도 추가한다. 로그에는 API 키·임베딩 벡터·전체 자막 원문을 기록하지 않지만 프롬프트,
-질문, 검색 근거가 포함될 수 있으므로 진단 목적으로만 사용한다.
+응답도 추가한다. 로그에는 API 키·임베딩 벡터를 기록하지 않지만, 렌더링된 요약 프롬프트에는
+전체 자막 원문이 포함되고 채팅 프롬프트에는 질문·검색 근거가 포함될 수 있으므로 진단 목적으로만 사용한다.
 
 `tubetalk/prompts/`는 요약·비전·채팅과 각 수정 요청의 버전별 템플릿을 제공한다.
 `SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`은 기능별 템플릿을
@@ -133,9 +141,10 @@ Loguru는 CLI entry point에서 한 번만 설정되며, `tubetalk` 네임스페
 
 ## 6. 설정과 로컬 저장소
 
-주요 환경 변수는 `GEMINI_API_KEY`, `DATA_DIR`, `SUMMARY_MODEL`, `VISION_MODEL`,
-`EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `SUMMARY_LANGUAGE`이다. 설정은 `.env`와
-환경 변수에서 읽는다.
+주요 환경 변수는 `GEMINI_API_KEY`, `DATA_DIR`, `LLM_MODEL`, `SUMMARY_MODEL`,
+`VISION_MODEL`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `SUMMARY_LANGUAGE`,
+`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`이다. 설정은
+`.env`와 환경 변수에서 읽는다.
 
 ```text
 data/{video_id}/
