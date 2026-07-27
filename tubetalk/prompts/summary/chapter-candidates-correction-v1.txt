@@ -1,0 +1,5 @@
+The candidate response below included block_index $block_index, but the only valid
+block indexes are 0 through $last_block_index. Return a complete corrected JSON
+candidates response. Every candidate must use one listed block_index.
+
+$prompt

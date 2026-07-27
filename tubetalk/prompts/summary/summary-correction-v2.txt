@@ -1,0 +1,5 @@
+The response below had a chapter start_sec of $start_sec outside 0.0 through
+$last_timestamp. Return a complete corrected JSON response. Preserve every
+candidate_ids assignment exactly once and use only valid timestamps.
+
+$prompt

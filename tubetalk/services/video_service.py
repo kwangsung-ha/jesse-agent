@@ -6,6 +6,7 @@ from typing import Callable, Optional
 from tubetalk.agent.retriever import HybridRetrievalError, HybridRetriever
 from tubetalk.core.cache import LocalCacheManager
 from tubetalk.core.logging import logger
+from tubetalk.domain.chaptering import ChapterBlockPolicy, ChapterWindowPolicy
 from tubetalk.domain.retrieval import ChatAnswer, ChatTurn, RetrievalHit
 from tubetalk.domain.state import CacheState, SyncState
 from tubetalk.domain.transcript import Transcript
@@ -133,6 +134,8 @@ class VideoService:
         vision_model: str,
         vision_prompt_version: str,
         chat_provider_factory: Callable[[], ChatProvider] | None = None,
+        summary_chapter_window_policy: str = ChapterWindowPolicy().cache_key,
+        summary_chapter_block_policy: str = ChapterBlockPolicy().cache_key,
     ) -> None:
         """Create a service with explicit infrastructure dependencies."""
         self._cache = cache
@@ -146,6 +149,8 @@ class VideoService:
         self._summary_model = summary_model
         self._summary_prompt_version = summary_prompt_version
         self._summary_language = summary_language
+        self._summary_chapter_window_policy = summary_chapter_window_policy
+        self._summary_chapter_block_policy = summary_chapter_block_policy
         self._vision_model = vision_model
         self._vision_prompt_version = vision_prompt_version
         self._ingestion_stage = VideoIngestionStage(cache, loader)
@@ -158,6 +163,8 @@ class VideoService:
             summary_model,
             summary_prompt_version,
             summary_language,
+            summary_chapter_window_policy,
+            summary_chapter_block_policy,
         )
         self._vision_stage = VisionIndexingStage(
             cache,
@@ -261,6 +268,8 @@ class VideoService:
             model=self._summary_model,
             prompt_version=self._summary_prompt_version,
             language=self._summary_language,
+            chapter_window_policy=self._summary_chapter_window_policy,
+            chapter_block_policy=self._summary_chapter_block_policy,
         )
         if status.state == CacheState.CURRENT and status.entry is not None:
             logger.bind(event="service.summary.cache", video_id=video_id).debug(

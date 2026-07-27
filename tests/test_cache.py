@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from tubetalk.core.cache import LocalCacheManager
+from tubetalk.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     Chapter,
@@ -196,6 +196,22 @@ def test_summary_cache_marks_changed_inputs_stale(tmp_path: Path) -> None:
         prompt_version="summary-chapters-v1",
         language="en",
     )
+    stale_by_chapter_policy = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+        chapter_window_policy="300s-8000chars-20s-v1",
+    )
+    stale_by_block_policy = cache.get_summary_status(
+        "vid1",
+        transcript,
+        model="gemini-3.5-flash-lite",
+        prompt_version="summary-chapters-v1",
+        language="ko",
+        chapter_block_policy="15s-300chars-1s-gap-v1",
+    )
 
     assert all(
         x == "stale"
@@ -204,6 +220,8 @@ def test_summary_cache_marks_changed_inputs_stale(tmp_path: Path) -> None:
             stale_by_model.state,
             stale_by_prompt.state,
             stale_by_language.state,
+            stale_by_chapter_policy.state,
+            stale_by_block_policy.state,
         ]
     )
 
@@ -302,7 +320,12 @@ def test_video_status_includes_current_vision_metadata(tmp_path: Path) -> None:
 
 def test_video_status_includes_current_summary_metadata(tmp_path: Path) -> None:
     """Status should expose summary freshness and generation provenance."""
-    cache = LocalCacheManager(data_dir=tmp_path)
+    cache = LocalCacheManager(
+        data_dir=tmp_path,
+        freshness_policy=CacheFreshnessPolicy(
+            summary_prompt_version="summary-chapters-v1"
+        ),
+    )
     transcript = _transcript()
     cache.save_json("vid1", "metadata.json", {"title": "예시"})
     cache.save_json(

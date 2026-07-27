@@ -18,7 +18,17 @@ def test_create_video_service_selects_gemini_and_chroma(
     chroma_repository = mocker.patch(
         "tubetalk.bootstrap.ChromaTranscriptIndexRepository"
     )
-    service = create_video_service(Settings(data_dir=tmp_path, gemini_api_key="key"))
+    config = Settings(
+        data_dir=tmp_path,
+        gemini_api_key="key",
+        chapter_window_max_seconds=300,
+        chapter_window_max_characters=8000,
+        chapter_window_overlap_seconds=20,
+        chapter_block_max_seconds=15,
+        chapter_block_max_characters=300,
+        chapter_block_max_gap_seconds=1,
+    )
+    service = create_video_service(config)
 
     provider = service._embedding_provider_factory()
     repository = service._transcript_index_repository_factory("video123")
@@ -42,7 +52,9 @@ def test_create_video_service_selects_gemini_and_chroma(
     summary_provider.assert_called_once_with(
         api_key="key",
         model="gemini-3.5-flash-lite",
-        prompt_version="summary-chapters-v1",
+        prompt_version="summary-chapters-v2",
+        chapter_window_policy=config.chapter_window_policy,
+        chapter_block_policy=config.chapter_block_policy,
     )
     vision_analyzer.assert_called_once_with(
         api_key="key",

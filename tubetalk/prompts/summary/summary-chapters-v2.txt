@@ -1,0 +1,9 @@
+Create a 3-5 sentence summary and chronological JSON chapters from these
+transcript-derived candidates. Every candidate ID must appear exactly once in a
+chapter's candidate_ids. Merge only candidates that describe the same topic;
+never omit a candidate to shorten the table of contents. Use only the supplied
+candidates and write in $language.
+
+Video title: $title
+Candidates:
+$candidates

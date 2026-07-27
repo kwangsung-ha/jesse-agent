@@ -34,6 +34,8 @@ def create_video_service(config: Settings = settings) -> VideoService:
                 summary_model=config.summary_model,
                 summary_prompt_version=config.summary_prompt_version,
                 summary_language=config.summary_language,
+                summary_chapter_window_policy=config.chapter_window_policy.cache_key,
+                summary_chapter_block_policy=config.chapter_block_policy.cache_key,
                 vision_model=config.vision_model,
                 vision_prompt_version=config.vision_prompt_version,
                 embedding_model=config.embedding_model,
@@ -50,6 +52,8 @@ def create_video_service(config: Settings = settings) -> VideoService:
         summary_model=config.summary_model,
         summary_prompt_version=config.summary_prompt_version,
         summary_language=config.summary_language,
+        summary_chapter_window_policy=config.chapter_window_policy.cache_key,
+        summary_chapter_block_policy=config.chapter_block_policy.cache_key,
         vision_model=config.vision_model,
         vision_prompt_version=config.vision_prompt_version,
     )
@@ -90,6 +94,8 @@ def _summary_provider_factory(config: Settings) -> Callable[[], SummaryProvider]
         api_key=config.gemini_api_key,
         model=config.summary_model,
         prompt_version=config.summary_prompt_version,
+        chapter_window_policy=config.chapter_window_policy,
+        chapter_block_policy=config.chapter_block_policy,
     )
 
 

@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from tubetalk.domain.chaptering import ChapterBlockPolicy, ChapterWindowPolicy
 from tubetalk.domain.state import CacheState
 
 SUMMARY_SCHEMA_VERSION = 1
@@ -67,6 +68,8 @@ class SummaryManifest(BaseModel):
     model: str
     prompt_version: str
     language: str
+    chapter_window_policy: str = ChapterWindowPolicy().cache_key
+    chapter_block_policy: str = ChapterBlockPolicy().cache_key
     generated_at: datetime
 
 

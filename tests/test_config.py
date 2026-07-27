@@ -23,7 +23,9 @@ def test_settings_defaults():
     assert s.llm_model == "gemini-3.5-flash-lite"
     assert s.summary_model == "gemini-3.5-flash-lite"
     assert s.summary_language == "ko"
-    assert s.summary_prompt_version == "summary-chapters-v1"
+    assert s.summary_prompt_version == "summary-chapters-v2"
+    assert s.chapter_window_policy.cache_key == "480s-12000chars-30s-v1"
+    assert s.chapter_block_policy.cache_key == "20s-400chars-1.5s-gap-v1"
     assert s.chat_prompt_version == "grounded-chat-v1"
     assert s.embedding_model == "gemini-embedding-2"
     assert s.embedding_dimension == 768
@@ -53,3 +55,42 @@ def test_settings_reject_unsupported_infrastructure(field: str, value: str) -> N
     """Only implementations installed in this release are selectable."""
     with pytest.raises(ValidationError):
         Settings(**{field: value})
+
+
+def test_settings_accepts_chapter_window_overrides() -> None:
+    """Chapter extraction limits can be selected through environment-backed fields."""
+    settings = Settings(
+        chapter_window_max_seconds=300,
+        chapter_window_max_characters=8000,
+        chapter_window_overlap_seconds=20,
+    )
+
+    assert settings.chapter_window_policy.cache_key == "300s-8000chars-20s-v1"
+
+
+def test_settings_reads_chapter_window_environment_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Uppercase environment variables configure the chapter policy."""
+    monkeypatch.setenv("CHAPTER_WINDOW_MAX_SECONDS", "300")
+    monkeypatch.setenv("CHAPTER_WINDOW_MAX_CHARACTERS", "8000")
+    monkeypatch.setenv("CHAPTER_WINDOW_OVERLAP_SECONDS", "20")
+
+    assert Settings().chapter_window_policy.cache_key == "300s-8000chars-20s-v1"
+
+
+def test_settings_reads_chapter_block_environment_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prompt-shaping block limits are independently configurable."""
+    monkeypatch.setenv("CHAPTER_BLOCK_MAX_SECONDS", "15")
+    monkeypatch.setenv("CHAPTER_BLOCK_MAX_CHARACTERS", "300")
+    monkeypatch.setenv("CHAPTER_BLOCK_MAX_GAP_SECONDS", "1")
+
+    assert Settings().chapter_block_policy.cache_key == "15s-300chars-1s-gap-v1"
+
+
+def test_settings_rejects_an_overlap_that_prevents_window_progress() -> None:
+    """Environment overrides must preserve a positive non-overlapping advance."""
+    with pytest.raises(ValidationError, match="overlap"):
+        Settings(chapter_window_max_seconds=30, chapter_window_overlap_seconds=30)

@@ -15,6 +15,8 @@ class PromptCatalog:
     _KIND_DIRECTORIES = {
         "summary": "summary",
         "summary_correction": "summary",
+        "chapter_candidates": "summary",
+        "chapter_candidates_correction": "summary",
         "vision": "vision",
         "chat": "chat",
         "chat_correction": "chat",

@@ -11,6 +11,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict
 
 from tubetalk.core.logging import logger
+from tubetalk.domain.chaptering import ChapterBlockPolicy, ChapterWindowPolicy
 from tubetalk.domain.state import CacheState
 from tubetalk.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
@@ -39,8 +40,10 @@ class CacheFreshnessPolicy(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     summary_model: str = "gemini-3.5-flash-lite"
-    summary_prompt_version: str = "summary-chapters-v1"
+    summary_prompt_version: str = "summary-chapters-v2"
     summary_language: str = "ko"
+    summary_chapter_window_policy: str = ChapterWindowPolicy().cache_key
+    summary_chapter_block_policy: str = ChapterBlockPolicy().cache_key
     vision_model: str = "gemini-3.5-flash"
     vision_prompt_version: str = "vision-scenes-v2-30s"
     embedding_model: str = "gemini-embedding-2"
@@ -139,6 +142,8 @@ class LocalCacheManager:
                 "model": entry.manifest.model,
                 "prompt_version": entry.manifest.prompt_version,
                 "language": entry.manifest.language,
+                "chapter_window_policy": entry.manifest.chapter_window_policy,
+                "chapter_block_policy": entry.manifest.chapter_block_policy,
                 "generated_at": entry.manifest.generated_at.isoformat(),
             },
         )
@@ -151,6 +156,8 @@ class LocalCacheManager:
         model: str,
         prompt_version: str,
         language: str,
+        chapter_window_policy: str | None = None,
+        chapter_block_policy: str | None = None,
     ) -> SummaryCacheStatus:
         """Return whether a cached summary matches its transcript and settings."""
         summary_path = self._data_dir / video_id / "summary.json"
@@ -173,6 +180,10 @@ class LocalCacheManager:
             or manifest.model != model
             or manifest.prompt_version != prompt_version
             or manifest.language != language
+            or manifest.chapter_window_policy
+            != (chapter_window_policy or ChapterWindowPolicy().cache_key)
+            or manifest.chapter_block_policy
+            != (chapter_block_policy or ChapterBlockPolicy().cache_key)
         ):
             state = CacheState.STALE
         else:
@@ -320,6 +331,10 @@ class LocalCacheManager:
             model=self._freshness_policy.summary_model,
             prompt_version=self._freshness_policy.summary_prompt_version,
             language=self._freshness_policy.summary_language,
+            chapter_window_policy=(
+                self._freshness_policy.summary_chapter_window_policy
+            ),
+            chapter_block_policy=self._freshness_policy.summary_chapter_block_policy,
         )
         summary_entry = summary_status.entry
 
@@ -495,6 +510,12 @@ def _summary_cache_entry(data: Any) -> SummaryCacheEntry:
         model=_required_text(data, "model"),
         prompt_version=_required_text(data, "prompt_version"),
         language=_required_text(data, "language"),
+        chapter_window_policy=data.get(
+            "chapter_window_policy", ChapterWindowPolicy().cache_key
+        ),
+        chapter_block_policy=data.get(
+            "chapter_block_policy", ChapterBlockPolicy().cache_key
+        ),
         generated_at=datetime.fromisoformat(_required_text(data, "generated_at")),
     )
     if manifest.schema_version != SUMMARY_SCHEMA_VERSION:

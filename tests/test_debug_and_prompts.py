@@ -30,6 +30,37 @@ def test_prompt_catalog_renders_versioned_summary_template() -> None:
     assert "$title" not in prompt
 
 
+def test_prompt_catalog_renders_candidate_template() -> None:
+    prompt = PromptCatalog().render(
+        "chapter_candidates",
+        "chapter-candidates-v1",
+        {
+            "language": "ko",
+            "title": "Example",
+            "window_start": "0.000",
+            "window_end": "12.000",
+            "transcript": "[00:00] Hello",
+        },
+    )
+
+    assert "Window: 0.000 through 12.000 seconds" in prompt
+    assert "[00:00] Hello" in prompt
+
+
+def test_prompt_catalog_renders_candidate_correction_template() -> None:
+    prompt = PromptCatalog().render(
+        "chapter_candidates_correction",
+        "chapter-candidates-correction-v1",
+        {
+            "prompt": "original prompt",
+            "block_index": "99",
+            "last_block_index": "1",
+        },
+    )
+
+    assert "block_index 99, but the only valid\nblock indexes are 0 through 1" in prompt
+
+
 def test_prompt_catalog_rejects_missing_or_unknown_templates() -> None:
     catalog = PromptCatalog()
 

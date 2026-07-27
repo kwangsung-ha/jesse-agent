@@ -125,7 +125,13 @@ poetry run tubetalk --help
 | `VISION_MODEL` | `gemini-3.5-flash` | 영상 장면 분석 모델 |
 | `EMBEDDING_MODEL` | `gemini-embedding-2` | 텍스트/비전 설명 임베딩 모델 |
 | `SUMMARY_LANGUAGE` | `ko` | 요약 및 목차 언어 |
-| `SUMMARY_PROMPT_VERSION` | `summary-chapters-v1` | 자막 요약 템플릿 버전 |
+| `SUMMARY_PROMPT_VERSION` | `summary-chapters-v2` | 자막 요약 템플릿 버전 |
+| `CHAPTER_WINDOW_MAX_SECONDS` | `480` | 챕터 후보 추출 자막 윈도우의 최대 시간(초) |
+| `CHAPTER_WINDOW_MAX_CHARACTERS` | `12000` | 챕터 후보 추출 자막 윈도우의 최대 문자 수 |
+| `CHAPTER_WINDOW_OVERLAP_SECONDS` | `30` | 인접 챕터 윈도우의 중첩 시간(초) |
+| `CHAPTER_BLOCK_MAX_SECONDS` | `20` | 후보 추출용 병합 자막 블록의 최대 시간(초) |
+| `CHAPTER_BLOCK_MAX_CHARACTERS` | `400` | 후보 추출용 병합 자막 블록의 최대 문자 수 |
+| `CHAPTER_BLOCK_MAX_GAP_SECONDS` | `1.5` | 같은 병합 블록으로 허용하는 자막 간 최대 공백(초) |
 | `VISION_PROMPT_VERSION` | `vision-scenes-v2-30s` | 비전 장면 템플릿 버전 |
 | `CHAT_PROMPT_VERSION` | `grounded-chat-v1` | 대화 템플릿 버전 |
 

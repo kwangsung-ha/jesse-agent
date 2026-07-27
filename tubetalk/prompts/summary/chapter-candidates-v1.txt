@@ -1,0 +1,11 @@
+Review this timestamped transcript window and return JSON candidates for every
+meaningful topic transition: claims, procedures, examples, comparisons,
+conclusions, and Q&A. Prefer extra candidates over omitting one. Use only
+supported facts and use the listed `B` block number as `block_index` for every
+candidate. Do not return a timestamp. Write concise titles in $language.
+
+Video title: $title
+Window: $window_start through $window_end seconds
+
+Transcript:
+$transcript

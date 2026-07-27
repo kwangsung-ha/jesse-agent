@@ -118,12 +118,16 @@ class SummaryGenerationStage:
         model: str,
         prompt_version: str,
         language: str,
+        chapter_window_policy: str,
+        chapter_block_policy: str,
     ) -> None:
         self._cache = cache
         self._provider_factory = provider_factory
         self._model = model
         self._prompt_version = prompt_version
         self._language = language
+        self._chapter_window_policy = chapter_window_policy
+        self._chapter_block_policy = chapter_block_policy
 
     def sync(
         self, video_id: str, metadata: VideoMetadata, transcript: Transcript
@@ -135,6 +139,8 @@ class SummaryGenerationStage:
                 model=self._model,
                 prompt_version=self._prompt_version,
                 language=self._language,
+                chapter_window_policy=self._chapter_window_policy,
+                chapter_block_policy=self._chapter_block_policy,
             )
             if status.state == CacheState.CURRENT and status.entry is not None:
                 return SummaryResult(
@@ -155,6 +161,8 @@ class SummaryGenerationStage:
                         model=self._model,
                         prompt_version=self._prompt_version,
                         language=self._language,
+                        chapter_window_policy=self._chapter_window_policy,
+                        chapter_block_policy=self._chapter_block_policy,
                         generated_at=datetime.now(timezone.utc),
                     ),
                 ),
