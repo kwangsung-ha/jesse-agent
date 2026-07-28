@@ -163,6 +163,37 @@ data/{video_id}/
 └── chromadb/
 ```
 
-## 7. 후속 설계 범위
+## 7. Task 12 목표 아키텍처: Durable Agent Runs
+
+Task 12는 현재 process-local `AgentSession`을 `AgentRunService`로 감싼다. CLI는 이
+서비스의 유일한 어댑터로 남고, 미래 HTTP·webhook·batch 어댑터도 같은 API를 호출한다.
+각 실행은 `DATA_DIR/agent_runs.sqlite3`의 append-only 이벤트를 source of truth로 사용한다.
+
+```mermaid
+graph TD
+    CLI[Typer CLI] --> RunService[AgentRunService]
+    Future[Future trigger adapters] -. shared API .-> RunService
+    RunService --> Repository[SQLite AgentRunRepository]
+    Repository --> Reducer[Agent state reducer]
+    Reducer --> Model[Gemini Agent model]
+    Reducer --> Tools[Validated tool executor]
+    Tools --> VideoService
+```
+
+- 실행 상태는 `running`, `pending_approval`, `paused`, `completed`, `failed`,
+  `cancelled` 중 하나이며, reducer는 `user_request`, `model_decision`, `tool_call`,
+  `tool_result`, `approval_requested`, `approval_resolved`, `final_response`,
+  `failure` 이벤트로부터 상태를 계산한다.
+- `launch`, `get_status`, `approve`, `reject`, `resume`, `list_runs`, `delete_run`
+  은 `AgentRunService`가 제공하는 애플리케이션 API다. 재개는 완료된 tool call을
+  다시 실행하지 않는다.
+- 새 외부 분석/생성 호출과 캐시 재생성은 `pending_approval`에서 멈춘다. 조회·검색·상태
+  도구는 즉시 실행한다.
+- 이벤트는 사용자가 삭제할 때까지 보관한다. API 키, 전체 렌더링 프롬프트, 자막 원문은
+  이벤트에 저장하지 않는다.
+- 모델 컨텍스트는 설정된 턴·크기 예산을 넘기면 결정론적으로 축약한다. 사용자 출력의
+  인용과 근거는 축약하지 않는다.
+
+## 8. 후속 설계 범위
 
 - 필요 시 vision provider 경계 뒤에 로컬 프레임 추출 또는 이미지 임베딩 구현
