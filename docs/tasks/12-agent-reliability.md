@@ -31,7 +31,7 @@ adapters for later work.
 - [x] **Check 12.2**: Add immutable Agent run/event/state contracts and a
   SQLite-backed append-only repository with unit tests for atomic persistence,
   listing, loading, and explicit deletion.
-- [ ] **Check 12.3**: Turn `AgentSession` into an event-driven reducer that
+- [x] **Check 12.3**: Turn `AgentSession` into an event-driven reducer that
   rebuilds state and model context from persisted events; attach run IDs to
   structured diagnostics and add reconstruction tests.
 - [ ] **Check 12.4**: Add a reusable `AgentRunService` with launch, status,

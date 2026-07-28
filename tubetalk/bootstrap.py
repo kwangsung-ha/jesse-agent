@@ -17,6 +17,9 @@ from tubetalk.infrastructure.repositories.chroma_transcript import (
 from tubetalk.infrastructure.repositories.chroma_vision import (
     ChromaVisionIndexRepository,
 )
+from tubetalk.infrastructure.repositories.sqlite_agent_runs import (
+    SQLiteAgentRunRepository,
+)
 from tubetalk.infrastructure.summaries.gemini import GeminiSummaryProvider
 from tubetalk.infrastructure.visions.gemini import GeminiVisionAnalyzer
 from tubetalk.pipeline.loader import YouTubeLoader
@@ -77,6 +80,7 @@ def create_agent_session(
         tools=VideoToolExecutor(create_video_service(config)),
         max_steps=config.agent_max_steps,
         on_tool_result=on_tool_result,
+        repository=SQLiteAgentRunRepository(config.data_dir / "agent_runs.sqlite3"),
     )
 
 

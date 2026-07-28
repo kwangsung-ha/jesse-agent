@@ -1,9 +1,22 @@
 """Agent loop tests with deterministic model and tool substitutes."""
 
+from pathlib import Path
 from typing import Any
+
+import pytest
 
 from tubetalk.agent.contracts import AgentDecision, ToolCall, ToolResult
 from tubetalk.agent.orchestrator import AgentSession
+from tubetalk.agent.reducer import AgentRunReductionError, model_messages, reduce_run
+from tubetalk.agent.runs import (
+    AgentEventType,
+    AgentRun,
+    AgentRunEvent,
+    NewAgentRunEvent,
+)
+from tubetalk.infrastructure.repositories.sqlite_agent_runs import (
+    SQLiteAgentRunRepository,
+)
 
 
 class StubTools:
@@ -51,3 +64,39 @@ def test_agent_stops_after_configured_tool_step_limit() -> None:
     answer = AgentSession(model, tools, max_steps=1).ask("영상 목록 보여줘")
 
     assert "단계 제한" in answer
+
+
+def test_agent_reconstructs_context_and_state_from_durable_events(
+    tmp_path: Path,
+) -> None:
+    """A fresh session can rebuild the same model input from the persisted run."""
+    repository = SQLiteAgentRunRepository(tmp_path / "runs.sqlite3")
+    tools = StubTools()
+    model = SequenceModel(
+        [
+            AgentDecision(tool_calls=(ToolCall(name="list_videos"),)),
+            AgentDecision(text="완료"),
+        ]
+    )
+    session = AgentSession(
+        model, tools, max_steps=3, repository=repository, run_id="durable-run"
+    )
+
+    assert session.ask("영상 목록 보여줘") == "완료"
+
+    run = repository.get_run("durable-run")
+    events = repository.list_events("durable-run")
+    state = reduce_run(run, events)
+
+    assert state.status == "completed"
+    assert [message.role for message in model_messages(events)] == ["user", "tool"]
+    assert model_messages(events)[0].content == "영상 목록 보여줘"
+
+
+def test_reducer_rejects_gapped_or_wrong_run_events() -> None:
+    """A durable state cannot be reconstructed from an invalid event log."""
+    run = AgentRun(run_id="run")
+    invalid = NewAgentRunEvent(run_id="other", event_type=AgentEventType.USER_REQUEST)
+
+    with pytest.raises(AgentRunReductionError):
+        reduce_run(run, (AgentRunEvent(sequence=2, **invalid.model_dump()),))
