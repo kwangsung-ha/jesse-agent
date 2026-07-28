@@ -2,9 +2,13 @@
 
 from collections.abc import Callable
 
+from tubetalk.agent.contracts import ToolResult
+from tubetalk.agent.orchestrator import AgentSession
+from tubetalk.agent.tools import VideoToolExecutor
 from tubetalk.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from tubetalk.core.config import Settings, settings
 from tubetalk.domain.transcript_index import TranscriptChunkPolicy
+from tubetalk.infrastructure.agents.gemini import GeminiAgentModel
 from tubetalk.infrastructure.chats.gemini import GeminiChatProvider
 from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
 from tubetalk.infrastructure.repositories.chroma_transcript import (
@@ -56,6 +60,23 @@ def create_video_service(config: Settings = settings) -> VideoService:
         summary_chapter_block_policy=config.chapter_block_policy.cache_key,
         vision_model=config.vision_model,
         vision_prompt_version=config.vision_prompt_version,
+    )
+
+
+def create_agent_session(
+    config: Settings = settings,
+    on_tool_result: Callable[[ToolResult], None] | None = None,
+) -> AgentSession:
+    """Build the human-facing Agent with a fresh tool and chat-session scope."""
+    return AgentSession(
+        model=GeminiAgentModel(
+            api_key=config.gemini_api_key,
+            model=config.llm_model,
+            prompt_version=config.agent_prompt_version,
+        ),
+        tools=VideoToolExecutor(create_video_service(config)),
+        max_steps=config.agent_max_steps,
+        on_tool_result=on_tool_result,
     )
 
 

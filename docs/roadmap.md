@@ -55,3 +55,8 @@
 - [x] **Task 10: 챕터 추출 재현율 고도화** `docs/tasks/10-chapter-extraction-recall.md`
   - PRD·설계서·로드맵의 구현 기준 정합성 유지
   - `poetry run poe check`에 Mypy strict 정적 타입 검사 포함
+
+## Phase 5: Natural-language Agent CLI
+- [x] **Task 11: Native Tool-calling Agent CLI** `docs/tasks/11-natural-language-agent.md`
+  - 자연어 요청을 Gemini function call과 결정론적 `VideoService` 도구로 연결
+  - 멀티턴 REPL 및 단발성 CLI 요청 지원

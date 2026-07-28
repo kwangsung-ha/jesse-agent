@@ -279,7 +279,7 @@ class VideoService:
         if not generate:
             raise SummaryUnavailableError(
                 f"Summary for '{video_id}' is {status.state}. "
-                f"Run 'tubetalk summary {video_id} --generate' to create it."
+                "Ask TubeTalk to generate or refresh the summary."
             )
         result = self._summary_stage.sync(
             video_id, cached_video.metadata, cached_video.transcript
@@ -305,7 +305,7 @@ class VideoService:
         if vision_status.entry is None:
             raise ChatUnavailableError(
                 "Vision scenes are unavailable or stale. "
-                "Run 'tubetalk process <url>' first."
+                "Ask TubeTalk to process the video first."
             )
         return ChatSession(
             HybridRetriever(

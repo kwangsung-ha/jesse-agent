@@ -44,7 +44,7 @@ def test_retriever_requires_both_current_indexes(mocker: Any) -> None:
     vision_repo.get_index_status.return_value = VisionVectorIndexStatus(state="stale")
     retriever = HybridRetriever(embeddings, transcript_repo, vision_repo)
 
-    with pytest.raises(HybridRetrievalError, match="Run 'tubetalk process"):
+    with pytest.raises(HybridRetrievalError, match="Ask TubeTalk to process"):
         retriever.retrieve(
             "what happened?",
             Transcript(segments=(TranscriptSegment(start_sec=0, text="hello"),)),

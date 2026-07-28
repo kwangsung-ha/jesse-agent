@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from tubetalk.bootstrap import create_video_service
+from tubetalk.bootstrap import create_agent_session, create_video_service
 from tubetalk.core.config import Settings
 from tubetalk.domain.transcript_index import TranscriptChunkPolicy
 
@@ -61,3 +61,19 @@ def test_create_video_service_selects_gemini_and_chroma(
         model="gemini-3.5-flash",
         prompt_version="vision-scenes-v2-30s",
     )
+
+
+def test_create_agent_session_wires_configured_model_and_tools(
+    tmp_path: Path, mocker: Any
+) -> None:
+    agent_model = mocker.patch("tubetalk.bootstrap.GeminiAgentModel")
+    executor = mocker.patch("tubetalk.bootstrap.VideoToolExecutor")
+    config = Settings(data_dir=tmp_path, gemini_api_key="key", agent_max_steps=3)
+
+    session = create_agent_session(config)
+
+    assert session is not None
+    agent_model.assert_called_once_with(
+        api_key="key", model="gemini-3.5-flash-lite", prompt_version="tool-agent-v1"
+    )
+    executor.assert_called_once()

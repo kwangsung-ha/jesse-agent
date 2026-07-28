@@ -20,6 +20,7 @@ class PromptCatalog:
         "vision": "vision",
         "chat": "chat",
         "chat_correction": "chat",
+        "agent": "agent",
     }
 
     def render(self, kind: str, version: str, values: Mapping[str, object]) -> str:

@@ -3,13 +3,15 @@
 ## 1. 시스템 개요
 
 TubeTalk는 YouTube 영상의 자막과 Gemini가 생성한 시각 장면 설명을 영상별 로컬
-캐시와 ChromaDB에 저장하는 CLI 애플리케이션이다. 수집·인덱싱·자막 요약·상태 조회와
-하이브리드 검색 기반 대화형 Q&A를 제공한다.
+캐시와 ChromaDB에 저장하는 자연어 CLI Agent다. Agent는 Gemini native function calling으로
+수집·인덱싱·요약·상태 조회·하이브리드 Q&A 도구를 선택하고, 결정론적 서비스 코드가 실행한다.
 
 ```mermaid
 graph TD
     User[User] --> CLI[Typer CLI]
-    CLI --> Service[VideoService]
+    CLI --> Agent[AgentSession]
+    Agent --> Tools[VideoToolExecutor]
+    Tools --> Service[VideoService]
     Service --> Cache[LocalCacheManager]
     Service --> Loader[YouTubeLoader]
     Loader --> YT[yt-dlp / YouTube Transcript API]
@@ -25,20 +27,21 @@ graph TD
 
 ## 2. 처리 흐름
 
-`tubetalk process <YOUTUBE_URL>`은 다음 흐름으로 동작한다.
+사용자가 “이 URL을 처리해줘”라고 요청하면 Agent가 `process_video(url)`을 선택하며, 이후
+처리 흐름은 다음과 같다.
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant CLI
+    participant Agent
     participant Service as VideoService
     participant Cache
     participant YT as YouTube services
     participant Gemini
     participant Chroma
 
-    User->>CLI: process URL
-    CLI->>Service: process(URL)
+    User->>Agent: 자연어 처리 요청
+    Agent->>Service: process_video(URL)
     Service->>Cache: metadata/transcript cache check
     alt cache miss
         Service->>YT: metadata and transcript fetch
@@ -50,8 +53,8 @@ sequenceDiagram
     Service->>Gemini: generate transcript summary if stale
     Service->>Gemini: analyze public YouTube URL if vision index stale
     Service->>Chroma: synchronize visual-scene embeddings if stale
-    Service-->>CLI: stage results and timings
-    CLI-->>User: summary, chapters, status, warnings
+    Service-->>Agent: structured tool result
+    Agent-->>User: natural-language result, summary, warnings
 ```
 
 수집 실패는 `process`를 실패시킨다. 반면 자막/비전 인덱싱과 요약 생성은 독립 단계로
@@ -62,13 +65,13 @@ sequenceDiagram
 ```text
 tubetalk/
 ├── bootstrap.py                    # Settings 기반 production wiring
-├── cli/main.py                     # process, status, summary Typer commands
+├── cli/main.py                     # REPL 및 단발성 자연어 Typer entry point
 ├── core/
 │   ├── cache.py                    # JSON cache와 freshness 상태
 │   └── config.py                   # Pydantic Settings
 │   ├── logging.py                  # CLI debug logging
 │   └── prompts.py                  # versioned prompt catalog
-├── agent/retriever.py              # dual retrieval and RRF fusion
+├── agent/                          # tool contracts, Agent loop, service tools, RRF
 ├── domain/                         # transcript, summary, vision, retrieval, status models
 ├── ports/                          # provider/repository protocol 및 오류 경계
 ├── pipeline/loader.py              # YouTube URL, metadata, transcript collection
@@ -78,6 +81,7 @@ tubetalk/
 │   ├── stages.py                   # independent processing stages
 │   └── results.py                  # typed use-case results
 └── infrastructure/
+    ├── agents/gemini.py            # native function-calling Agent adapter
     ├── chats/gemini.py             # grounded chat adapter
     ├── embeddings/gemini.py        # Gemini Embedding 2 adapter
     ├── summaries/gemini.py         # structured transcript-summary adapter
@@ -117,33 +121,35 @@ Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 �
 
 ## 5. CLI
 
-| 명령 | 동작 |
+| 실행 | 동작 |
 | --- | --- |
-| `tubetalk process <url>` | 수집 또는 캐시 재사용 후 자막·요약·비전 인덱스를 최신화하고 결과를 표시 |
-| `tubetalk status [video_id]` | 전체 캐시 목록 또는 특정 영상의 캐시·인덱스 상세 상태 표시 |
-| `tubetalk summary [video_id]` | 현재 요약을 표시. ID 생략 시 캐시 영상 선택 |
-| `tubetalk summary <video_id> --generate` | 요약이 없거나 stale이면 생성 |
-| `tubetalk chat [video_id]` | 자막·비전 근거를 융합해 멀티턴 Q&A. ID 생략 시 캐시 영상 선택 |
+| `tubetalk` | 멀티턴 자연어 REPL을 시작한다. |
+| `tubetalk "요청"` | 한 자연어 요청을 처리하고 종료한다. |
 
-`chat`은 완전한 원본 캐시와 파싱 가능한 비전 씬 엔트리가 있으면 세션을 시작한다. 각 질문 전에 자막·비전 벡터 인덱스가 모두 최신인지 확인하며, 최신이 아니면 질문을 거부한다. 세션 기록은 디스크에 저장하지 않는다.
+Agent는 `process_video`, `list_videos`, `get_video_status`, `get_summary`,
+`answer_video_question`만 호출할 수 있다. 도구 입력은 Pydantic schema로 검증하고, 서비스
+오류는 모델 문맥에 구조화해 전달한다. Agent 세션은 현재 영상 ID와 영상별 Q&A 이력을
+메모리에만 보관한다.
 
 ### 디버그 관찰성 및 프롬프트
 
 Loguru는 CLI entry point에서 한 번만 설정되며, `tubetalk` 네임스페이스는 기본적으로
-비활성화된다. `tubetalk --debug <command>`는 stderr에 cache·loader·Chroma·서비스·검색
+비활성화된다. `tubetalk --debug "요청"`은 stderr에 cache·loader·Chroma·서비스·검색
 단계와 렌더링된 Gemini 프롬프트를 기록한다. `--debug --verbose`는 TRACE 레벨의 원본 모델
 응답도 추가한다. 로그에는 API 키·임베딩 벡터를 기록하지 않지만, 렌더링된 요약 프롬프트에는
 전체 자막 원문이 포함되고 채팅 프롬프트에는 질문·검색 근거가 포함될 수 있으므로 진단 목적으로만 사용한다.
 
 `tubetalk/prompts/`는 요약·비전·채팅과 각 수정 요청의 버전별 템플릿을 제공한다.
-`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`은 기능별 템플릿을
+`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`,
+`AGENT_PROMPT_VERSION`은 기능별 템플릿을
 선택한다. 요약·비전의 선택 값은 기존 manifest `prompt_version` 최신성 판정에 사용한다.
 
 ## 6. 설정과 로컬 저장소
 
 주요 환경 변수는 `GEMINI_API_KEY`, `DATA_DIR`, `LLM_MODEL`, `SUMMARY_MODEL`,
 `VISION_MODEL`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `SUMMARY_LANGUAGE`,
-`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`이다. 설정은
+`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`,
+`AGENT_PROMPT_VERSION`, `AGENT_MAX_STEPS`이다. 설정은
 `.env`와 환경 변수에서 읽는다.
 
 ```text

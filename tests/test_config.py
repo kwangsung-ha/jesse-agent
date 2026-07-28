@@ -27,6 +27,8 @@ def test_settings_defaults():
     assert s.chapter_window_policy.cache_key == "480s-12000chars-30s-v1"
     assert s.chapter_block_policy.cache_key == "20s-400chars-1.5s-gap-v1"
     assert s.chat_prompt_version == "grounded-chat-v1"
+    assert s.agent_prompt_version == "tool-agent-v1"
+    assert s.agent_max_steps == 8
     assert s.embedding_model == "gemini-embedding-2"
     assert s.embedding_dimension == 768
     assert s.embedding_provider == "gemini"

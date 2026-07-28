@@ -44,68 +44,22 @@ export GEMINI_API_KEY=your_api_key
 
 ## 사용법
 
-### 영상 처리
+`tubetalk`은 자연어 요청을 안전한 내부 도구 호출로 바꾸는 멀티턴 Agent입니다.
 
 ```bash
-poetry run tubetalk process 'https://www.youtube.com/watch?v=VIDEO_ID'
+# 대화 세션
+poetry run tubetalk
+
+# 한 번 요청하고 종료
+poetry run tubetalk 'https://www.youtube.com/watch?v=VIDEO_ID 를 처리하고 요약해줘'
 
 # 단계, 프롬프트, 검색 근거를 stderr로 확인
-poetry run tubetalk --debug process 'https://www.youtube.com/watch?v=VIDEO_ID'
-
-# 모델 원본 응답까지 확인
-poetry run tubetalk --debug --verbose process 'https://www.youtube.com/watch?v=VIDEO_ID'
+poetry run tubetalk --debug '캐시된 영상 목록을 보여줘'
 ```
 
-처리 시 `data/<video_id>/`에 메타데이터와 자막을 캐시하고, 가능한 경우 다음을
-생성합니다.
-
-- 자막 벡터 인덱스
-- 요약 및 타임스탬프 목차
-- 시각적 장면 설명 및 비전 벡터 인덱스
-
-같은 영상을 다시 처리하면 기존 캐시와 최신 인덱스를 재사용합니다. 개별 Gemini 또는
-인덱싱 단계 실패는 경고로 표시되며, 수집된 자막 캐시는 보존됩니다.
-
-### 캐시 상태 확인
-
-모든 로컬 영상의 상태를 확인합니다.
-
-```bash
-poetry run tubetalk status
-```
-
-특정 영상의 상세 상태를 확인합니다.
-
-```bash
-poetry run tubetalk status VIDEO_ID
-```
-
-### 요약 조회 또는 생성
-
-```bash
-# 캐시된 영상 선택 후 요약 조회
-poetry run tubetalk summary
-
-# 특정 영상 요약 조회
-poetry run tubetalk summary VIDEO_ID
-
-# 요약이 없거나 오래된 경우 새로 생성
-poetry run tubetalk summary VIDEO_ID --generate
-```
-
-### 영상과 대화
-
-자막과 비전 인덱스가 모두 최신인 영상만 대화할 수 있습니다.
-
-```bash
-# 캐시된 영상 목록에서 선택
-poetry run tubetalk chat
-
-# 특정 영상과 바로 대화
-poetry run tubetalk chat VIDEO_ID
-```
-
-답변에는 검색된 자막 청크 또는 시각 장면 구간 안에서 검증된 타임스탬프 인용이 표시됩니다.
+예를 들어 “이 URL을 처리해줘”, “캐시된 영상 목록을 보여줘”, “video_id의 요약을
+새로 만들어줘”, “방금 영상에서 그래프가 나오는 부분은 언제야?”라고 요청할 수 있습니다.
+처리 결과는 `data/<video_id>/`에 캐시되며, 답변에는 검증된 타임스탬프 인용이 표시됩니다.
 
 전체 명령 목록은 다음으로 확인할 수 있습니다.
 
@@ -134,6 +88,8 @@ poetry run tubetalk --help
 | `CHAPTER_BLOCK_MAX_GAP_SECONDS` | `1.5` | 같은 병합 블록으로 허용하는 자막 간 최대 공백(초) |
 | `VISION_PROMPT_VERSION` | `vision-scenes-v2-30s` | 비전 장면 템플릿 버전 |
 | `CHAT_PROMPT_VERSION` | `grounded-chat-v1` | 대화 템플릿 버전 |
+| `AGENT_PROMPT_VERSION` | `tool-agent-v1` | 자연어 도구 호출 Agent 템플릿 버전 |
+| `AGENT_MAX_STEPS` | `8` | 요청당 최대 도구 호출 단계 수 |
 
 전체 설정값은 [`tubetalk/core/config.py`](tubetalk/core/config.py)에서 확인할 수 있습니다.
 프롬프트는 `tubetalk/prompts/`의 버전 파일로 관리합니다. 템플릿을 변경할 때는 새 버전을

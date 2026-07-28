@@ -309,7 +309,7 @@ def test_get_summary_requires_generate_for_missing_cache(
     cache = LocalCacheManager(data_dir=tmp_path)
     _save_video(cache, "video123")
 
-    with pytest.raises(SummaryUnavailableError, match="--generate"):
+    with pytest.raises(SummaryUnavailableError, match="Ask TubeTalk"):
         service.get_summary("video123")
 
     result = service.get_summary("video123", generate=True)

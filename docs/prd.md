@@ -8,7 +8,7 @@
 
 ### 현재 제공 범위
 
-현재 CLI는 다음 기능을 제공한다.
+현재 자연어 CLI Agent는 다음 기능을 제공한다.
 
 - YouTube 메타데이터와 한국어/영어 자막 수집 및 로컬 캐시
 - Gemini Embedding 2 기반 자막 벡터 인덱스
@@ -56,7 +56,7 @@
 
 | 구분 | 사용 기술 | 역할 |
 | --- | --- | --- |
-| CLI | Python, Typer, Rich | `process`, `status`, `summary`, `chat` 명령 및 표 출력 |
+| CLI | Python, Typer, Rich | 자연어 요청을 서비스 도구 호출로 변환하는 멀티턴 Agent |
 | 설정 | Pydantic Settings | `.env`와 환경 변수 기반 설정 |
 | 수집 | `yt-dlp`, `youtube-transcript-api` | 메타데이터와 자막 수집 |
 | 생성 모델 | Google Gemini (`google-genai`) | 자막 요약 및 공개 URL 비전 장면 분석 |
@@ -94,7 +94,7 @@ data/
 ### Phase 3: 하이브리드 검색 및 대화형 CLI — 완료
 
 - Dual Retriever, RRF, 타임스탬프 인용 검증
-- 멀티턴 `tubetalk chat <video_id>`
+- 멀티턴 자연어 `tubetalk` Agent와 단발성 `tubetalk "요청"`
 
 ## 6. 성공 지표
 

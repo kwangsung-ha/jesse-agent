@@ -55,7 +55,7 @@ class HybridRetriever:
         ):
             raise HybridRetrievalError(
                 "Transcript and vision indexes must be current. "
-                "Run 'tubetalk process <url>' first."
+                "Ask TubeTalk to process the video first."
             )
         try:
             embedding = self._embedding_provider.embed_query(query)

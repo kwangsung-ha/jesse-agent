@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     chapter_block_max_characters: int = 400
     chapter_block_max_gap_seconds: float = 1.5
     chat_prompt_version: str = "grounded-chat-v1"
+    agent_prompt_version: str = "tool-agent-v1"
+    agent_max_steps: int = 8
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = 768
     embedding_provider: Literal["gemini"] = "gemini"
