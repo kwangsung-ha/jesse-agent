@@ -28,7 +28,7 @@ adapters for later work.
 
 - [x] **Check 12.1**: Add this Task 12 specification, the Phase 6 roadmap entry,
   and the durable-run architecture to the design document.
-- [ ] **Check 12.2**: Add immutable Agent run/event/state contracts and a
+- [x] **Check 12.2**: Add immutable Agent run/event/state contracts and a
   SQLite-backed append-only repository with unit tests for atomic persistence,
   listing, loading, and explicit deletion.
 - [ ] **Check 12.3**: Turn `AgentSession` into an event-driven reducer that
