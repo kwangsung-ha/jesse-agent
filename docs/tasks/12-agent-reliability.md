@@ -37,7 +37,7 @@ adapters for later work.
 - [x] **Check 12.4**: Add a reusable `AgentRunService` with launch, status,
   approve, reject, resume, list, and delete operations; enforce state
   transitions and never re-run completed calls on resume.
-- [ ] **Check 12.5**: Add configurable context budgets and deterministic compact
+- [x] **Check 12.5**: Add configurable context budgets and deterministic compact
   views for conversation history and large tool results, with preservation tests
   for current-video context and citations.
 - [ ] **Check 12.6**: Replace generic tool-result dictionaries with per-tool

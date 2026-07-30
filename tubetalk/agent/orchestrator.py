@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
+from tubetalk.agent.context import AgentContextBudget, compact_messages
 from tubetalk.agent.contracts import AgentDecision, AgentMessage, ToolResult
 from tubetalk.agent.reducer import model_messages, reduce_run
 from tubetalk.agent.runs import (
@@ -47,12 +48,14 @@ class AgentSession:
         repository: AgentRunRepository | None = None,
         run_id: str | None = None,
         existing_run: AgentRun | None = None,
+        context_budget: AgentContextBudget = AgentContextBudget(),
     ) -> None:
         self._model = model
         self._tools = tools
         self._max_steps = max_steps
         self._on_tool_result = on_tool_result
         self._repository = repository
+        self._context_budget = context_budget
         self._events: list[NewAgentRunEvent] = []
         if repository is None:
             if existing_run is not None:
@@ -79,12 +82,16 @@ class AgentSession:
         """Continue a persisted run without repeating completed tool calls."""
         for _ in range(self._max_steps):
             if self._run is None:
-                messages = self._legacy_messages(tuple(self._events))
+                messages = compact_messages(
+                    self._legacy_messages(tuple(self._events)), self._context_budget
+                )
                 current_video_id = self._tools.current_video_id
             else:
                 events = self._persistent_events()
                 state = reduce_run(self._run, events)
-                messages = model_messages(events)
+                messages = compact_messages(
+                    model_messages(events), self._context_budget
+                )
                 current_video_id = state.current_video_id
             try:
                 decision = self._model.decide(

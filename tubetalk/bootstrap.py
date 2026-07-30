@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from tubetalk.agent.context import AgentContextBudget
 from tubetalk.agent.contracts import ToolResult
 from tubetalk.agent.orchestrator import AgentSession
 from tubetalk.agent.tools import VideoToolExecutor
@@ -81,6 +82,10 @@ def create_agent_session(
         max_steps=config.agent_max_steps,
         on_tool_result=on_tool_result,
         repository=SQLiteAgentRunRepository(config.data_dir / "agent_runs.sqlite3"),
+        context_budget=AgentContextBudget(
+            max_messages=config.agent_context_max_messages,
+            max_characters=config.agent_context_max_characters,
+        ),
     )
 
 

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     chat_prompt_version: str = "grounded-chat-v1"
     agent_prompt_version: str = "tool-agent-v1"
     agent_max_steps: int = 8
+    agent_context_max_messages: int = 24
+    agent_context_max_characters: int = 12000
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = 768
     embedding_provider: Literal["gemini"] = "gemini"
