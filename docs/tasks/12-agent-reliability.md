@@ -49,7 +49,7 @@ adapters for later work.
 - [x] **Check 12.8**: Extend the Typer CLI with run inspection, approval,
   rejection, resumption, and deletion commands; Ctrl-C must leave a resumable
   paused run.
-- [ ] **Check 12.9**: Define the trigger port used by the CLI and document how a
+- [x] **Check 12.9**: Define the trigger port used by the CLI and document how a
   future HTTP, webhook, or batch adapter invokes the same run service without
   duplicating Agent flow.
 - [ ] **Check 12.10**: Update user-facing documentation; cover persistence,
