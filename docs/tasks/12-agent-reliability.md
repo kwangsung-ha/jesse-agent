@@ -46,7 +46,7 @@ adapters for later work.
 - [x] **Check 12.7**: Add an Agent-visible approval request tool and policy:
   read-only operations run immediately, while new paid generation/analysis and
   cache regeneration wait for approval.
-- [ ] **Check 12.8**: Extend the Typer CLI with run inspection, approval,
+- [x] **Check 12.8**: Extend the Typer CLI with run inspection, approval,
   rejection, resumption, and deletion commands; Ctrl-C must leave a resumable
   paused run.
 - [ ] **Check 12.9**: Define the trigger port used by the CLI and document how a
