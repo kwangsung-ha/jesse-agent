@@ -69,7 +69,7 @@
 ## Phase 7: Personal Knowledge Agent Foundation
 - [i] **Task 13: JesseAgent 개명 및 확장 가능한 개인 Agent 기반** `docs/tasks/13-personal-agent-foundation.md`
   - [x] JesseAgent 패키지·CLI·문서 정식 개명 (기존 이름 호환 없음)
-  - [ ] 공통 KnowledgeDocument/KnowledgeChunk와 Source connector 계약
+  - [x] 공통 KnowledgeDocument/KnowledgeChunk와 Source connector 계약
   - [ ] Obsidian 증분 색인과 SQLite FTS5·Chroma 공통 검색 저장소
   - [ ] 등록형 Agent 작업과 Source 검색 도구
   - [ ] Sink connector 계약과 승인 미리보기 흐름

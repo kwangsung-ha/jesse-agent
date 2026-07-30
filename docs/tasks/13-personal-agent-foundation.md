@@ -20,7 +20,7 @@ JesseAgent를 YouTube 전용 도구에서 개인 지식과 작업을 위한 확�
 
 - [x] **Check 13.1**: 프로젝트·Python 패키지·CLI·테스트·문서 참조를 JesseAgent로
   일괄 개명하고 품질 게이트를 통과한다.
-- [ ] **Check 13.2**: 공통 지식 문서·청크 모델과 Source connector Protocol을 정의하고,
+- [x] **Check 13.2**: 공통 지식 문서·청크 모델과 Source connector Protocol을 정의하고,
   기존 YouTube 데이터를 정식 Source로 투영하는 단위 테스트를 작성한다.
 - [ ] **Check 13.3**: Obsidian Markdown 파서와 heading 기반 chunker를 구현하고,
   frontmatter·태그·Wiki link·변경 감지 테스트를 작성한다.
