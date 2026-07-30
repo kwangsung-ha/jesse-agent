@@ -43,7 +43,7 @@ adapters for later work.
 - [x] **Check 12.6**: Replace generic tool-result dictionaries with per-tool
   validated input/output contracts, call IDs, compact error codes, and safe
   recommended next actions.
-- [ ] **Check 12.7**: Add an Agent-visible approval request tool and policy:
+- [x] **Check 12.7**: Add an Agent-visible approval request tool and policy:
   read-only operations run immediately, while new paid generation/analysis and
   cache regeneration wait for approval.
 - [ ] **Check 12.8**: Extend the Typer CLI with run inspection, approval,

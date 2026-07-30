@@ -123,6 +123,20 @@ class AgentSession:
                     AgentEventType.TOOL_RESULT,
                     result.model_dump(mode="json"),
                 )
+                if result.error_code == "approval_required":
+                    self._append(
+                        AgentEventType.APPROVAL_REQUESTED,
+                        {"call_id": call.call_id, "tool_name": call.name},
+                    )
+                    return (
+                        "이 작업은 비용 또는 데이터 변경을 수반합니다. 승인해 주세요."
+                    )
+                if result.name == "request_approval" and result.ok:
+                    self._append(
+                        AgentEventType.APPROVAL_REQUESTED,
+                        result.content,
+                    )
+                    return "작업 실행 전에 승인이 필요합니다. 승인해 주세요."
                 logger.bind(event="agent.tool_result", run_id=self.run_id).debug(
                     "tool={} ok={}", result.name, result.ok
                 )
