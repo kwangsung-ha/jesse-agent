@@ -22,16 +22,16 @@ JesseAgent를 YouTube 전용 도구에서 개인 지식과 작업을 위한 확�
   일괄 개명하고 품질 게이트를 통과한다.
 - [x] **Check 13.2**: 공통 지식 문서·청크 모델과 Source connector Protocol을 정의하고,
   기존 YouTube 데이터를 정식 Source로 투영하는 단위 테스트를 작성한다.
-- [ ] **Check 13.3**: Obsidian Markdown 파서와 heading 기반 chunker를 구현하고,
+- [x] **Check 13.3**: PRD와 설계 문서를 개인 Agent의 Source·검색·작업·Sink 경계로
+  갱신하고 구현 순서와 비범위를 검토한다.
+- [ ] **Check 13.4**: Obsidian Markdown 파서와 heading 기반 chunker를 구현하고,
   frontmatter·태그·Wiki link·변경 감지 테스트를 작성한다.
-- [ ] **Check 13.4**: SQLite 카탈로그/FTS5와 Chroma 공통 인덱스를 구현하고,
+- [ ] **Check 13.5**: SQLite 카탈로그/FTS5와 Chroma 공통 인덱스를 구현하고,
   `jesseagent sources sync obsidian` 증분 동기화를 제공한다.
-- [ ] **Check 13.5**: 벡터·키워드 RRF 검색, Obsidian URI 근거, 등록형 Agent 작업과
+- [ ] **Check 13.6**: 벡터·키워드 RRF 검색, Obsidian URI 근거, 등록형 Agent 작업과
   조회 도구를 구현한다.
-- [ ] **Check 13.6**: Sink connector의 계획·미리보기·명시 승인 계약을 durable run
+- [ ] **Check 13.7**: Sink connector의 계획·미리보기·명시 승인 계약을 durable run
   lifecycle에 연결하고 실제 Sink 없이 상태 전이 테스트를 작성한다.
-- [ ] **Check 13.7**: 사용자 문서와 설계를 개인 Agent 아키텍처로 갱신하고 전체 품질
-  게이트를 통과한다.
 
 ## Completion Rules
 

@@ -1,203 +1,108 @@
 # System Design Specification: JesseAgent
 
-## 1. 시스템 개요
+## 1. 목표 아키텍처
 
-JesseAgent는 YouTube 영상의 자막과 Gemini가 생성한 시각 장면 설명을 영상별 로컬
-캐시와 ChromaDB에 저장하는 자연어 CLI Agent다. Agent는 Gemini native function calling으로
-수집·인덱싱·요약·상태 조회·하이브리드 Q&A 도구를 선택하고, 결정론적 서비스 코드가 실행한다.
+JesseAgent는 Source·검색·Agent 작업·Sink를 분리한다. 현재 YouTube는 첫 Source이며,
+Obsidian을 추가해도 기존 영상 처리와 durable Agent run의 책임은 변하지 않는다.
 
 ```mermaid
 graph TD
     User[User] --> CLI[Typer CLI]
-    CLI --> Agent[AgentSession]
-    Agent --> Tools[VideoToolExecutor]
-    Tools --> Service[VideoService]
-    Service --> Cache[LocalCacheManager]
-    Service --> Loader[YouTubeLoader]
-    Loader --> YT[yt-dlp / YouTube Transcript API]
-    Service --> Summary[GeminiSummaryProvider]
-    Service --> Vision[GeminiVisionAnalyzer]
-    Service --> Embed[GeminiEmbeddingProvider]
-    Embed --> TextRepo[ChromaTranscriptIndexRepository]
-    Embed --> VisionRepo[ChromaVisionIndexRepository]
-    Cache --> JSON[Video JSON cache]
-    TextRepo --> Chroma[Video-scoped ChromaDB]
-    VisionRepo --> Chroma
+    CLI --> RunService[AgentRunService]
+    RunService --> Agent[AgentSession]
+    Agent --> Tasks[Task Registry]
+    Tasks --> Sources[Source Connectors]
+    Sources --> Sync[Knowledge Sync Service]
+    Sync --> Catalog[SQLite Catalog + FTS5]
+    Sync --> Vectors[Chroma Knowledge Index]
+    Tasks --> Retrieve[Hybrid Retriever]
+    Retrieve --> Catalog
+    Retrieve --> Vectors
+    Tasks --> Sinks[Sink Connectors]
+    Sinks --> Approval[Preview + explicit approval]
 ```
 
-## 2. 처리 흐름
+## 2. 경계와 계약
 
-사용자가 “이 URL을 처리해줘”라고 요청하면 Agent가 `process_video(url)`을 선택하며, 이후
-처리 흐름은 다음과 같다.
+### Knowledge model
+
+`KnowledgeDocument`는 source-neutral 원문 레코드다. `source_id`, `document_id`, URI,
+title, content, SHA-256, 변경 시각, JSON-safe metadata를 가진다. `KnowledgeChunk`는
+문서 ID와 순번·본문·메타데이터를 가진 검색 단위다.
+
+`SourceConnector`는 `source_id`와 안정적으로 정렬된 `list_documents()`를 제공한다.
+sync 서비스가 connector, hash, 저장소, 재시도 정책을 조합하며 connector는 임베딩·DB·Agent
+상태를 직접 다루지 않는다.
+
+`SinkConnector`는 후속 항목에서 `plan()`과 `apply(approved_plan)` 계약을 갖는다. `plan()`은
+사용자 미리보기에 충분한 변경 요약을 반환하고 `apply()`는 durable run의 승인 후에만 호출된다.
+connector는 원문 읽기나 외부 반영만 담당하며 작업의 프롬프트·비즈니스 흐름·승인 판단을
+소유하지 않는다.
+
+### Source 구현 상태
+
+- `YouTubeSourceConnector`: 현재 로컬 캐시의 완전한 자막을 timestamp-preserving
+  `KnowledgeDocument`로 투영한다. 비전 장면 공통화는 공통 인덱스 작업과 함께 추가한다.
+- `ObsidianSourceConnector`: 다음 구현 항목에서 Markdown을 읽고 frontmatter·heading·tags·Wiki
+  links를 metadata로 변환한다. 읽기 전용이며 watcher는 포함하지 않는다.
+
+## 3. 색인과 검색 흐름
+
+Obsidian sync의 목표 흐름은 아래와 같다.
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant Agent
-    participant Service as VideoService
-    participant Cache
-    participant YT as YouTube services
-    participant Gemini
+    participant CLI
+    participant Source as ObsidianSourceConnector
+    participant Sync as KnowledgeSyncService
+    participant SQL as SQLite Catalog/FTS5
     participant Chroma
-
-    User->>Agent: 자연어 처리 요청
-    Agent->>Service: process_video(URL)
-    Service->>Cache: metadata/transcript cache check
-    alt cache miss
-        Service->>YT: metadata and transcript fetch
-        Service->>Cache: save metadata.json, transcript.json
-    else cache hit
-        Cache-->>Service: cached metadata and transcript
+    Sync->>SQL: compare manifest and update links/FTS
+    alt new or changed document
+        Sync->>Sync: heading-first chunking
+        Sync->>Chroma: replace document chunks and embeddings
     end
-    Service->>Chroma: synchronize transcript embeddings if stale
-    Service->>Gemini: generate transcript summary if stale
-    Service->>Gemini: analyze public YouTube URL if vision index stale
-    Service->>Chroma: synchronize visual-scene embeddings if stale
-    Service-->>Agent: structured tool result
-    Agent-->>User: natural-language result, summary, warnings
+    Sync->>SQL: remove deleted documents
+    Sync->>Chroma: remove deleted document chunks
 ```
 
-수집 실패는 `process`를 실패시킨다. 반면 자막/비전 인덱싱과 요약 생성은 독립 단계로
-실행되므로, 해당 단계의 Gemini·네트워크 오류는 경고로 반환하고 기존 캐시를 보존한다.
+질문은 Gemini query embedding을 통한 Chroma 검색과 SQLite FTS5 검색을 병렬 수행하고 RRF로
+결합한다. 답변 모델에는 상위의 제한된 evidence만 보낸다. 모델이 인용한 document/chunk ID는
+검색 결과에 존재해야 하며, 인터페이스는 이를 Obsidian URI 또는 YouTube timestamp로 렌더링한다.
 
-## 3. 구현 구조
+## 4. Agent 실행과 승인
 
-```text
-jesseagent/
-├── bootstrap.py                    # Settings 기반 production wiring
-├── cli/main.py                     # REPL 및 단발성 자연어 Typer entry point
-├── core/
-│   ├── cache.py                    # JSON cache와 freshness 상태
-│   └── config.py                   # Pydantic Settings
-│   ├── logging.py                  # CLI debug logging
-│   └── prompts.py                  # versioned prompt catalog
-├── agent/                          # tool contracts, Agent loop, service tools, RRF
-├── domain/                         # transcript, summary, vision, retrieval, status models
-├── ports/                          # provider/repository protocol 및 오류 경계
-├── pipeline/loader.py              # YouTube URL, metadata, transcript collection
-├── prompts/                        # versioned summary, vision, chat templates
-├── services/
-│   ├── video_service.py            # application use cases와 ChatSession
-│   ├── stages.py                   # independent processing stages
-│   └── results.py                  # typed use-case results
-└── infrastructure/
-    ├── agents/gemini.py            # native function-calling Agent adapter
-    ├── chats/gemini.py             # grounded chat adapter
-    ├── embeddings/gemini.py        # Gemini Embedding 2 adapter
-    ├── summaries/gemini.py         # structured transcript-summary adapter
-    ├── visions/gemini.py           # public YouTube URL scene analyzer
-    └── repositories/
-        ├── chroma_transcript.py    # transcript_collection
-        └── chroma_vision.py        # vision_collection
-```
+`AgentRunService`와 SQLite append-only event log는 계속 lifecycle source of truth다. 읽기
+작업(검색, 원문 조회, 상태 조회)은 즉시 실행한다. 유료 생성, 새 Source 수집, Sink 적용은
+`approval_requested` 이벤트를 기록하고 `pending_approval`에서 중지한다. 재개는 완료된
+도구 호출을 다시 실행하지 않는다.
 
-`VideoService`는 인터페이스에만 의존하며, 실제 Gemini·Chroma 구현은
-`bootstrap.create_video_service()`가 설정에 따라 연결한다. 이 경계로 테스트에서는
-외부 API를 mock으로 대체한다.
+`TaskDefinition`은 Agent가 호출할 하나의 등록형 작업이다. 이름·설명, Pydantic 입력/출력
+schema, side-effect policy, 실행기, 필요한 Source/Sink, 프롬프트 kind/version을 가진다.
+Gemini tool declaration은 Task Registry에서 파생하며, 모델은 등록된 작업과 schema-valid
+인자만 선택할 수 있다.
 
-## 4. 핵심 설계
+`TaskExecutor`는 TaskDefinition을 실행해 입력 검증, 제한된 context 조립, 프롬프트 렌더링,
+결정론적 검증·재시도와 오류 요약을 담당한다. 사람이 조정하는 프롬프트는 저장소의 버전된
+파일로 관리하고, 생성 산출물과 durable run에는 사용 버전을 기록한다. 따라서 새 작업은
+Agent loop를 수정하지 않고 작업 등록·prompt 파일·bootstrap wiring으로 추가하며, Source와
+Sink는 그 작업이 의존하는 I/O adapter로만 조합한다.
 
-### 자막 수집과 캐시
+## 5. 저장소와 호환성
 
-- `YouTubeLoader.extract_video_id()`는 일반 watch URL, short URL, shorts·embed URL에서 11자 video ID를 추출한다.
-- 메타데이터는 `yt-dlp --dump-json --no-download`, 자막은 `youtube-transcript-api`로 수집한다.
-- 기본 자막 언어 우선순위는 한국어(`ko`), 영어(`en`)다.
-- `metadata.json`과 `transcript.json`이 모두 있으면 캐시 히트로 본다.
+- 기존 `data/<video_id>/` JSON/영상별 Chroma 캐시는 유지한다.
+- `knowledge.sqlite3`와 `knowledge_chromadb/`는 새 공통 검색 영역이며 기존 캐시와
+  충돌하지 않는다.
+- `agent_runs.sqlite3`의 event schema는 유지한다. Sink 계획에는 API 키, 전체 원문,
+  렌더링 프롬프트를 넣지 않는다.
+- Python 패키지와 CLI는 `jesseagent`, `jesseagent-runs`로 즉시 전환됐으며 `tubetalk`
+  호환 별칭은 제공하지 않는다.
 
-Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 있지 않다.
+## 6. 구현 순서
 
-### 자막 요약
-
-- `GeminiSummaryProvider`는 자막 전체를 시간 표기와 함께 전달하고 JSON 형식의 3~5문장 요약·목차를 요청한다. 응답은 비어 있지 않은 요약과 시간순 목차로 검증하며, 요약 문장 수는 강제하지 않는다.
-- `summary.json` manifest는 자막 SHA-256, 모델, 프롬프트 버전, 언어, 생성 시각을 보관한다.
-- 모델이 범위를 벗어난 목차 시간을 반환하면 한 번의 수정 요청 후 다시 검증한다.
-
-### 비전 장면과 벡터 인덱스
-
-- `GeminiVisionAnalyzer`는 공개 YouTube URL을 비디오 입력으로 Gemini에 전달한다. 장면은 전체 길이를 덮는 시간순 구간으로 요청하며, 응답 시간은 영상 길이 안으로 보정하고 시작 시간순으로 정렬한다. 장면 간 공백 없는 전체 커버리지는 검증하지 않는다.
-- `vision_index.json`에는 장면과 source URL, 모델, 프롬프트 버전, 스키마 버전, 생성 시각이 저장된다.
-- 자막은 `transcript_collection`, 장면 설명은 `vision_collection`에 명시적 벡터로 저장한다. 두 컬렉션 모두 영상별 `chromadb/` 경로에 있으며 cosine 거리를 사용한다.
-- 각 컬렉션의 manifest는 원본 해시, 임베딩 모델·차원, 레코드 수, 인덱싱 시각을 기록해 current/stale/invalid/missing 상태를 판정한다.
-
-## 5. CLI
-
-| 실행 | 동작 |
-| --- | --- |
-| `jesseagent` | 멀티턴 자연어 REPL을 시작한다. |
-| `jesseagent "요청"` | 한 자연어 요청을 처리하고 종료한다. |
-
-Agent는 `process_video`, `list_videos`, `get_video_status`, `get_summary`,
-`answer_video_question`만 호출할 수 있다. 도구 입력은 Pydantic schema로 검증하고, 서비스
-오류는 모델 문맥에 구조화해 전달한다. Agent 세션은 현재 영상 ID와 영상별 Q&A 이력을
-메모리에만 보관한다.
-
-### 디버그 관찰성 및 프롬프트
-
-Loguru는 CLI entry point에서 한 번만 설정되며, `jesseagent` 네임스페이스는 기본적으로
-비활성화된다. `jesseagent --debug "요청"`은 stderr에 cache·loader·Chroma·서비스·검색
-단계와 렌더링된 Gemini 프롬프트를 기록한다. `--debug --verbose`는 TRACE 레벨의 원본 모델
-응답도 추가한다. 로그에는 API 키·임베딩 벡터를 기록하지 않지만, 렌더링된 요약 프롬프트에는
-전체 자막 원문이 포함되고 채팅 프롬프트에는 질문·검색 근거가 포함될 수 있으므로 진단 목적으로만 사용한다.
-
-`jesseagent/prompts/`는 요약·비전·채팅과 각 수정 요청의 버전별 템플릿을 제공한다.
-`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`,
-`AGENT_PROMPT_VERSION`은 기능별 템플릿을
-선택한다. 요약·비전의 선택 값은 기존 manifest `prompt_version` 최신성 판정에 사용한다.
-
-## 6. 설정과 로컬 저장소
-
-주요 환경 변수는 `GEMINI_API_KEY`, `DATA_DIR`, `LLM_MODEL`, `SUMMARY_MODEL`,
-`VISION_MODEL`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `SUMMARY_LANGUAGE`,
-`SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`,
-`AGENT_PROMPT_VERSION`, `AGENT_MAX_STEPS`이다. 설정은
-`.env`와 환경 변수에서 읽는다.
-
-```text
-data/{video_id}/
-├── metadata.json
-├── transcript.json
-├── summary.json
-├── vision_index.json
-├── index_manifest.json
-├── vision_vector_manifest.json
-└── chromadb/
-```
-
-## 7. Task 12 목표 아키텍처: Durable Agent Runs
-
-Task 12는 현재 process-local `AgentSession`을 `AgentRunService`로 감싼다. CLI는 이
-서비스의 유일한 어댑터로 남고, 미래 HTTP·webhook·batch 어댑터도 같은 API를 호출한다.
-각 실행은 `DATA_DIR/agent_runs.sqlite3`의 append-only 이벤트를 source of truth로 사용한다.
-
-```mermaid
-graph TD
-    CLI[Typer CLI] --> RunService[AgentRunService]
-    Future[Future trigger adapters] -. shared API .-> RunService
-    RunService --> Repository[SQLite AgentRunRepository]
-    Repository --> Reducer[Agent state reducer]
-    Reducer --> Model[Gemini Agent model]
-    Reducer --> Tools[Validated tool executor]
-    Tools --> VideoService
-```
-
-- 실행 상태는 `running`, `pending_approval`, `paused`, `completed`, `failed`,
-  `cancelled` 중 하나이며, reducer는 `user_request`, `model_decision`, `tool_call`,
-  `tool_result`, `approval_requested`, `approval_resolved`, `paused`,
-  `final_response`, `failure` 이벤트로부터 상태를 계산한다.
-- `launch`, `get_status`, `approve`, `reject`, `resume`, `list_runs`, `delete_run`
-  은 `AgentRunService`가 제공하는 애플리케이션 API다. 재개는 완료된 tool call을
-  다시 실행하지 않는다.
-- 새 외부 분석/생성 호출과 캐시 재생성은 `pending_approval`에서 멈춘다. 조회·검색·상태
-  도구는 즉시 실행한다.
-- 이벤트는 사용자가 삭제할 때까지 보관한다. API 키, 전체 렌더링 프롬프트, 자막 원문은
-  이벤트에 저장하지 않는다.
-- 모델 컨텍스트는 설정된 턴·크기 예산을 넘기면 결정론적으로 축약한다. 사용자 출력의
-  인용과 근거는 축약하지 않는다.
-- `AgentRunTrigger` port가 이 lifecycle API를 선언한다. 현재 `jesseagent-runs`가 이를
-  호출하며, 미래 HTTP endpoint는 `launch(request)`, webhook은 검증된 payload를 request로
-  변환해 `launch`, batch는 저장된 `run_id`로 `resume`만 호출한다. 어느 adapter도 모델 loop,
-  이벤트 기록, 승인 상태 전이를 직접 구현하지 않는다.
-
-## 8. 후속 설계 범위
-
-- 필요 시 vision provider 경계 뒤에 로컬 프레임 추출 또는 이미지 임베딩 구현
+1. 제품·설계 문서를 개인 Agent 경계로 갱신한다.
+2. Obsidian parser와 heading chunker를 단위 테스트로 구현한다.
+3. SQLite/FTS5·Chroma 공통 카탈로그와 명시적 sync CLI를 구현한다.
+4. 하이브리드 검색과 등록형 Agent 조회 작업을 기존 run lifecycle에 연결한다.
+5. Sink 계획·미리보기·승인 계약을 추가한다.

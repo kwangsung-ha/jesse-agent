@@ -1,103 +1,107 @@
-# PRD: JesseAgent — YouTube Video Intelligence Agent
+# PRD: JesseAgent — Personal Knowledge & Task Agent
 
-## 1. 프로젝트 개요
+## 1. 제품 개요
 
-- **프로젝트명**: JesseAgent
-- **목적**: YouTube URL의 자막과 시각적 장면 정보를 로컬에 축적하고, 요약·타임스탬프 목차·향후 하이브리드 검색과 Q&A를 제공하는 CLI AI 에이전트
-- **핵심 가치**: 자막만으로 찾기 어려운 화면 속 인물·객체·차트·행동을 비전 장면 설명으로 함께 인덱싱한다.
+JesseAgent는 Jesse의 개인 지식과 작업을 한 곳에서 다루는 로컬 우선 CLI Agent다.
+YouTube와 Obsidian 같은 **Source connector**에서 정보를 수집·색인하고, 근거가 있는
+답변을 제공하며, 장차 **Sink connector**를 통해 승인된 작업 결과를 외부 시스템에
+반영한다.
 
-### 현재 제공 범위
+### 핵심 가치
 
-현재 자연어 CLI Agent는 다음 기능을 제공한다.
+- 개인 자료를 원본 위치에 유지하고, 필요한 근거만 검색해 Gemini에 전달한다.
+- 소스별 형식 차이를 공통 지식 모델로 흡수해 한 번의 검색과 대화에서 활용한다.
+- 모든 쓰기·외부 전송은 미리보기와 명시적 승인 뒤에만 실행한다.
+- 답변에는 원문으로 돌아갈 수 있는 출처를 제공한다.
 
-- YouTube 메타데이터와 한국어/영어 자막 수집 및 로컬 캐시
-- Gemini Embedding 2 기반 자막 벡터 인덱스
-- Gemini Flash-Lite 기반 자막 요약과 타임스탬프 목차
-- Gemini의 공개 YouTube URL 직접 분석 기반 시각 장면 설명 및 비전 벡터 인덱스
-- 캐시와 각 인덱스의 최신 상태 조회
+### 현재 상태
 
-자막·비전 검색 결과를 융합한 근거 인용형 멀티턴 `chat` Q&A를 제공한다.
+- JesseAgent CLI와 durable Agent run/승인 기반은 구현됐다.
+- YouTube 수집·자막/비전 색인·영상 Q&A는 계속 지원한다.
+- `KnowledgeDocument`, `KnowledgeChunk`, Source connector 계약과 YouTube transcript
+  adapter가 구현됐다.
+
+Obsidian 색인, 공통 검색 저장소, 등록형 Agent 작업, 실제 Sink는 Task 13의 후속 항목이다.
 
 ## 2. 기능 요구사항
 
-### F-1. 로컬 영속성 및 수집
+### F-1. Source connector와 수집
 
-- YouTube URL에서 `video_id`를 추출하고 `./data/{video_id}/` 캐시를 먼저 확인한다.
-- 캐시가 없으면 `yt-dlp`로 메타데이터를, `youtube-transcript-api`로 한국어/영어 자막을 수집한다.
-- 메타데이터·자막·요약·비전 장면·벡터 인덱스 manifest를 영상별 로컬 디렉터리에 저장한다.
-- 캐시가 있으면 원본 수집을 생략하고, 원본 데이터·모델·프롬프트·임베딩 설정이 변경된 인덱스만 갱신한다.
+- 모든 Source connector는 안정적인 source/document ID, URI, 제목, 원문, 메타데이터,
+  콘텐츠 SHA-256, 변경 시각을 가진 `KnowledgeDocument`를 반환한다.
+- YouTube는 정식 Source로 유지한다. 기존 영상 캐시는 삭제하거나 마이그레이션하지 않는다.
+- Obsidian은 `OBSIDIAN_VAULT_PATH` 아래의 Markdown만 읽는다. 첫 릴리스에서는
+  `jesseagent sources sync obsidian`의 명시적 동기화만 제공한다.
+- Obsidian 문서에서 frontmatter, 태그, 경로, 제목, heading, Wiki link, 파일 수정 시각을
+  추출한다. 첨부 파일과 비 Markdown 파일은 제외한다.
 
-현재 자막이 없는 영상에 대한 Whisper 또는 오디오 기반 fallback은 지원하지 않는다.
+### F-2. 공통 지식 색인
 
-### F-2. 자막 요약 및 타임스탬프 목차
+- 문서를 heading 우선으로 청킹하고, 긴 섹션만 크기 제한과 중첩을 적용해 추가 분할한다.
+- SQLite는 문서 manifest, 콘텐츠 해시, 메타데이터, Wiki link, FTS5 키워드 인덱스를 가진다.
+- Chroma는 모든 Source의 검색용 청크와 Gemini 임베딩을 저장한다.
+- sync는 해시가 같은 문서를 재임베딩하지 않고, 수정 문서는 교체하며 삭제된 문서는 두
+  저장소에서 제거한다.
 
-- 자막에서 근거를 찾을 수 있는 3~5문장 요약과 시간순 목차를 Gemini에 요청한다. 구현은 비어 있지 않은 요약과 시간순 목차를 검증하지만 문장 수는 강제하지 않는다.
-- 목차의 `start_sec`는 실제 자막 시간 범위 안에 있는지 검증한다.
-- 생성 결과와 자막 해시·모델·프롬프트·언어 정보를 `summary.json`에 저장해 최신성을 판단한다.
+### F-3. 검색과 근거형 답변
 
-현재 요약 입력은 자막이며, 비전 장면 설명을 결합한 멀티모달 요약은 후속 범위다.
+- 벡터 검색과 FTS5 검색을 독립적으로 수행하고 RRF로 결합한다.
+- 검색 결과는 Source·문서 URI·경로·heading·본문 발췌를 유지한다.
+- Obsidian 근거는 `obsidian://open` URI로, YouTube 근거는 원본 URL과 타임스탬프로
+  원문을 열 수 있어야 한다.
+- Agent는 근거만으로 답할 수 없으면 그 한계를 분명히 말하고 사실을 추정하지 않는다.
 
-### F-3. 비전 씬 인덱싱
+### F-4. 확장 가능한 Agent 작업과 Sink
 
-- 공개 YouTube URL을 Gemini에 직접 제공해 영상 전체를 덮는 시간순 시각 장면 설명을 Gemini에 요청한다. 구현은 장면 시간을 영상 길이 안으로 보정하고 시간순으로 정렬하지만, 장면 간 공백 없는 전체 커버리지는 강제하지 않는다.
-- 장면마다 시작/종료 시간, 시각적 설명, 감지 객체를 저장한다.
-- 장면 설명을 Gemini Embedding 2로 임베딩하고 영상별 ChromaDB `vision_collection`에 저장한다.
-- 비전 분석이나 인덱싱 실패는 이미 수집된 메타데이터·자막·요약 캐시를 삭제하지 않고 경고로 보고한다.
+- Agent 작업은 `TaskDefinition`으로 등록하는 확장 단위다. 작업은 이름·설명, Pydantic
+  입력/출력 계약, side-effect·승인 정책, 실행기, 사용하는 Source/Sink와 버전된 프롬프트를
+  명시한다.
+- Agent는 자연어 요청을 등록된 작업의 검증 가능한 tool call로 변환할 뿐이다. 작업 실행기는
+  검색·생성·검증·오류 처리를 결정론적으로 조합하며, 임의의 tool이나 인자를 실행하지 않는다.
+- 작업별 프롬프트는 저장소의 버전 파일로 관리한다. 생성 산출물과 실행 기록에는 사용한
+  프롬프트 버전을 남겨 사람이 품질을 조정하고 결과를 재현할 수 있어야 한다.
+- 읽기 작업은 즉시 실행하고, Source 수집 비용·외부 생성·Sink 적용은 durable run의
+  `pending_approval` 상태에서 멈춘다.
+- Source connector는 원문 읽기만, Sink connector는 변경 계획·사용자용 미리보기와 승인된
+  계획의 적용만 담당한다. 작업의 비즈니스 흐름과 프롬프트는 connector에 두지 않는다.
+- 첫 릴리스는 Sink 계약과 승인 흐름만 제공하며, Obsidian 쓰기·파일 이동·외부 서비스
+  전송은 제공하지 않는다.
 
-로컬 영상 다운로드, OpenCV 키프레임 추출, 프레임 이미지 저장은 현재 범위에 포함하지 않는다.
+## 3. 기술 및 운영 제약
 
-### F-4. 하이브리드 검색 및 Q&A
-
-- 자막과 비전 장면 컬렉션을 각각 검색한 뒤 Reciprocal Rank Fusion(RRF)으로 결과를 결합한다.
-- 답변에 포함한 타임스탬프가 실제 자막 또는 장면 구간인지 검증한다.
-- CLI 세션에서 멀티턴 대화 맥락을 유지한다.
-
-## 3. 기술 스택
-
-| 구분 | 사용 기술 | 역할 |
+| 구분 | 선택 | 역할 |
 | --- | --- | --- |
-| CLI | Python, Typer, Rich | 자연어 요청을 서비스 도구 호출로 변환하는 멀티턴 Agent |
-| 설정 | Pydantic Settings | `.env`와 환경 변수 기반 설정 |
-| 수집 | `yt-dlp`, `youtube-transcript-api` | 메타데이터와 자막 수집 |
-| 생성 모델 | Google Gemini (`google-genai`) | 자막 요약 및 공개 URL 비전 장면 분석 |
-| 임베딩 | Gemini Embedding 2 | 자막 청크와 비전 설명 임베딩 |
-| 저장소 | ChromaDB PersistentClient + JSON | 영상별 벡터 컬렉션·캐시·manifest 영속화 |
-| 품질 | pytest, pytest-cov, Ruff, Poe the Poet | 테스트·90% 커버리지 기준·정적 검사 |
+| CLI/Agent | Python, Typer, Rich, Gemini function calling | 자연어 작업과 durable run |
+| Source | YouTube, Obsidian Markdown | 개인 지식 원본 |
+| 생성·임베딩 | Google Gemini | 검색 질의·제한된 근거 기반 답변 |
+| 검색 저장소 | SQLite FTS5, Chroma PersistentClient | 키워드·벡터 하이브리드 검색 |
+| 영속성 | JSON, SQLite | 기존 영상 캐시, 지식 카탈로그, Agent event log |
+| 품질 | pytest, Ruff, mypy, Poe | 90% 이상 커버리지 품질 게이트 |
 
-## 4. 로컬 데이터 구조
+Vault 원문과 색인 저장소는 로컬에 남는다. 질문과 최종 검색된 일부 청크만 Gemini API로
+전송될 수 있다. API 키, 전체 렌더링 프롬프트, 원문 전체는 Agent event log에 저장하지
+않는다.
+
+## 4. 목표 로컬 데이터 구조
 
 ```text
 data/
-└── {video_id}/
-    ├── metadata.json                # 제목, 채널, 길이, 원본 URL 등
-    ├── transcript.json              # 타임스탬프 자막
-    ├── summary.json                 # 자막 요약, 목차, 생성 manifest
-    ├── vision_index.json            # 시각 장면, 생성 manifest
-    ├── index_manifest.json          # 자막 벡터 인덱스 manifest
-    ├── vision_vector_manifest.json  # 비전 벡터 인덱스 manifest
-    └── chromadb/                    # transcript_collection, vision_collection
+├── <video_id>/                   # 보존되는 기존 YouTube 캐시
+│   ├── metadata.json
+│   ├── transcript.json
+│   ├── summary.json
+│   ├── vision_index.json
+│   └── chromadb/
+├── knowledge.sqlite3             # 문서 manifest, links, FTS5
+├── knowledge_chromadb/           # 모든 Source의 공통 청크 벡터 인덱스
+└── agent_runs.sqlite3            # 재개 가능한 실행 이벤트
 ```
 
-## 5. 단계별 로드맵
+## 5. 성공 기준과 비범위
 
-### Phase 1: 로컬 캐시·자막 인덱스·요약 — 완료
-
-- 수집, 영상별 JSON 캐시, 캐시 상태 CLI
-- 자막 청크의 명시적 Gemini 임베딩과 ChromaDB 인덱스
-- 자막 기반 요약 및 타임스탬프 목차
-
-### Phase 2: Gemini 비전 장면 인덱싱 — 완료
-
-- 공개 URL 직접 분석 기반 시각 장면 설명 캐시
-- 장면 설명의 ChromaDB 벡터 인덱스
-
-### Phase 3: 하이브리드 검색 및 대화형 CLI — 완료
-
-- Dual Retriever, RRF, 타임스탬프 인용 검증
-- 멀티턴 자연어 `jesseagent` Agent와 단발성 `jesseagent "요청"`
-
-## 6. 성공 지표
-
-- 동일 영상 재처리에서 유효한 캐시와 인덱스를 재사용한다.
-- 각 캐시·인덱스는 원본 해시와 모델·프롬프트·임베딩 설정 변경을 감지해 stale 상태를 표시한다.
-- 하이브리드 Q&A 완성 후 시각 이벤트 검색의 타임스탬프 오차를 10초 이하, 답변 인용 일치율을 90% 이상으로 측정한다.
+- 수정되지 않은 Obsidian 문서는 재임베딩하지 않으며, 수정·삭제 사항은 다음 sync에서
+  검색 결과에 반영된다.
+- 개인 지식 질문은 최소 한 개의 검증 가능한 출처와 함께 답한다.
+- 승인 없는 Sink 적용이나 외부 전송은 절대 실행하지 않는다.
+- 첫 릴리스에는 파일 watcher, Obsidian 쓰기, 웹/API UI, 다중 사용자/권한 관리, 로컬 LLM
+  운영을 포함하지 않는다.
