@@ -34,7 +34,7 @@ adapters for later work.
 - [x] **Check 12.3**: Turn `AgentSession` into an event-driven reducer that
   rebuilds state and model context from persisted events; attach run IDs to
   structured diagnostics and add reconstruction tests.
-- [ ] **Check 12.4**: Add a reusable `AgentRunService` with launch, status,
+- [x] **Check 12.4**: Add a reusable `AgentRunService` with launch, status,
   approve, reject, resume, list, and delete operations; enforce state
   transitions and never re-run completed calls on resume.
 - [ ] **Check 12.5**: Add configurable context budgets and deterministic compact

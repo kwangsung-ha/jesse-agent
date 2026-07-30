@@ -26,6 +26,7 @@ class AgentEventType(StrEnum):
     TOOL_RESULT = "tool_result"
     APPROVAL_REQUESTED = "approval_requested"
     APPROVAL_RESOLVED = "approval_resolved"
+    PAUSED = "paused"
     FINAL_RESPONSE = "final_response"
     FAILURE = "failure"
 

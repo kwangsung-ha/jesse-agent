@@ -46,6 +46,7 @@ class AgentSession:
         on_tool_result: Callable[[ToolResult], None] | None = None,
         repository: AgentRunRepository | None = None,
         run_id: str | None = None,
+        existing_run: AgentRun | None = None,
     ) -> None:
         self._model = model
         self._tools = tools
@@ -54,10 +55,13 @@ class AgentSession:
         self._repository = repository
         self._events: list[NewAgentRunEvent] = []
         if repository is None:
+            if existing_run is not None:
+                raise ValueError("An existing run requires durable persistence")
             self._run: AgentRun | None = None
         else:
-            self._run = AgentRun(run_id=run_id or uuid4().hex)
-            repository.create_run(self._run)
+            self._run = existing_run or AgentRun(run_id=run_id or uuid4().hex)
+            if existing_run is None:
+                repository.create_run(self._run)
 
     @property
     def run_id(self) -> str | None:
@@ -69,6 +73,10 @@ class AgentSession:
         if not request.strip():
             return "무엇을 도와드릴까요?"
         self._append(AgentEventType.USER_REQUEST, {"content": request})
+        return self.resume()
+
+    def resume(self) -> str:
+        """Continue a persisted run without repeating completed tool calls."""
         for _ in range(self._max_steps):
             if self._run is None:
                 messages = self._legacy_messages(tuple(self._events))

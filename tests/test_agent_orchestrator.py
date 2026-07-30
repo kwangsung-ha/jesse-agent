@@ -100,3 +100,45 @@ def test_reducer_rejects_gapped_or_wrong_run_events() -> None:
 
     with pytest.raises(AgentRunReductionError):
         reduce_run(run, (AgentRunEvent(sequence=2, **invalid.model_dump()),))
+
+
+def test_resumed_session_does_not_repeat_a_completed_tool_call(tmp_path: Path) -> None:
+    """Resume asks for the next decision after persisted tool output."""
+    repository = SQLiteAgentRunRepository(tmp_path / "runs.sqlite3")
+    run = AgentRun(run_id="resume")
+    repository.create_run(run)
+    repository.append_event(
+        NewAgentRunEvent(
+            run_id=run.run_id,
+            event_type=AgentEventType.USER_REQUEST,
+            payload={"content": "목록 보여줘"},
+        )
+    )
+    repository.append_event(
+        NewAgentRunEvent(
+            run_id=run.run_id,
+            event_type=AgentEventType.TOOL_CALL,
+            payload={"name": "list_videos", "arguments": {}},
+        )
+    )
+    repository.append_event(
+        NewAgentRunEvent(
+            run_id=run.run_id,
+            event_type=AgentEventType.TOOL_RESULT,
+            payload={"name": "list_videos", "ok": True, "content": {}},
+        )
+    )
+    repository.append_event(
+        NewAgentRunEvent(run_id=run.run_id, event_type=AgentEventType.PAUSED)
+    )
+    tools = StubTools()
+    session = AgentSession(
+        SequenceModel([AgentDecision(text="재개 완료")]),
+        tools,
+        max_steps=2,
+        repository=repository,
+        existing_run=run,
+    )
+
+    assert session.resume() == "재개 완료"
+    assert tools.calls == []

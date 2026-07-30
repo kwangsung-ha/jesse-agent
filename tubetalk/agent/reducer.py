@@ -30,7 +30,13 @@ def reduce_run(run: AgentRun, events: tuple[AgentRunEvent, ...]) -> AgentRunStat
         elif event.event_type == AgentEventType.APPROVAL_REQUESTED:
             status = AgentRunStatus.PENDING_APPROVAL
         elif event.event_type == AgentEventType.APPROVAL_RESOLVED:
-            status = AgentRunStatus.RUNNING
+            status = (
+                AgentRunStatus.RUNNING
+                if event.payload.get("approved") is True
+                else AgentRunStatus.CANCELLED
+            )
+        elif event.event_type == AgentEventType.PAUSED:
+            status = AgentRunStatus.PAUSED
         elif event.event_type == AgentEventType.FINAL_RESPONSE:
             status = AgentRunStatus.COMPLETED
         elif event.event_type == AgentEventType.FAILURE:
