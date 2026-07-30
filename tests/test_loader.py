@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tubetalk.pipeline.loader import VideoLoaderError, YouTubeLoader
+from jesseagent.pipeline.loader import VideoLoaderError, YouTubeLoader
 
 # ------------------------------------------------------------------
 # extract_video_id
@@ -80,7 +80,7 @@ class TestFetchTranscript:
         mock_api = MagicMock()
         mock_api.fetch.return_value = _make_transcript_segments()
         mocker.patch(
-            "tubetalk.pipeline.loader.YouTubeTranscriptApi",
+            "jesseagent.pipeline.loader.YouTubeTranscriptApi",
             return_value=mock_api,
         )
 
@@ -98,7 +98,7 @@ class TestFetchTranscript:
         mock_api = MagicMock()
         mock_api.fetch.return_value = _make_transcript_segments()
         mocker.patch(
-            "tubetalk.pipeline.loader.YouTubeTranscriptApi",
+            "jesseagent.pipeline.loader.YouTubeTranscriptApi",
             return_value=mock_api,
         )
 
@@ -110,7 +110,7 @@ class TestFetchTranscript:
         mock_api = MagicMock()
         mock_api.fetch.side_effect = ValueError("transcript unavailable")
         mocker.patch(
-            "tubetalk.pipeline.loader.YouTubeTranscriptApi", return_value=mock_api
+            "jesseagent.pipeline.loader.YouTubeTranscriptApi", return_value=mock_api
         )
 
         with pytest.raises(VideoLoaderError, match="Failed to fetch transcript"):
@@ -138,7 +138,7 @@ class TestFetchMetadata:
     def test_returns_expected_keys(self, mocker: Any) -> None:
         """fetch_metadata should return typed metadata."""
         mocker.patch(
-            "tubetalk.pipeline.loader.subprocess.run",
+            "jesseagent.pipeline.loader.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
@@ -162,7 +162,7 @@ class TestFetchMetadata:
     def test_calls_ytdlp_correctly(self, mocker: Any) -> None:
         """fetch_metadata should invoke yt-dlp with the right arguments."""
         mock_run = mocker.patch(
-            "tubetalk.pipeline.loader.subprocess.run",
+            "jesseagent.pipeline.loader.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
@@ -184,7 +184,7 @@ class TestFetchMetadata:
     def test_converts_invalid_ytdlp_json(self, mocker: Any) -> None:
         """Malformed external metadata should use the loader error boundary."""
         mocker.patch(
-            "tubetalk.pipeline.loader.subprocess.run",
+            "jesseagent.pipeline.loader.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="not json", stderr=""
             ),

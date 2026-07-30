@@ -3,9 +3,9 @@
 from types import SimpleNamespace
 from typing import Any
 
-from tubetalk.agent.contracts import ToolCall
-from tubetalk.agent.tools import ProcessVideoInput, VideoToolExecutor
-from tubetalk.services.video_service import VideoNotFoundError
+from jesseagent.agent.contracts import ToolCall
+from jesseagent.agent.tools import ProcessVideoInput, VideoToolExecutor
+from jesseagent.services.video_service import VideoNotFoundError
 
 
 def test_process_tool_calls_service_and_sets_current_video(mocker: Any) -> None:

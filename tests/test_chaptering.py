@@ -2,14 +2,14 @@
 
 import pytest
 
-from tubetalk.domain.chaptering import (
+from jesseagent.domain.chaptering import (
     ChapterBlockPolicy,
     ChapterCandidate,
     ChapterWindowPolicy,
     block_transcript_segments,
     window_transcript,
 )
-from tubetalk.domain.transcript import Transcript, TranscriptSegment
+from jesseagent.domain.transcript import Transcript, TranscriptSegment
 
 
 def _transcript(*segments: tuple[float, float, str]) -> Transcript:

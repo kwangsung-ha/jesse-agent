@@ -1,7 +1,7 @@
 """Tests for deterministic Agent model-context compaction."""
 
-from tubetalk.agent.context import AgentContextBudget, compact_messages
-from tubetalk.agent.contracts import AgentMessage
+from jesseagent.agent.context import AgentContextBudget, compact_messages
+from jesseagent.agent.contracts import AgentMessage
 
 
 def test_compaction_keeps_newest_messages_within_both_budgets() -> None:

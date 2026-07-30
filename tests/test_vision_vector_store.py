@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from tubetalk.domain.vision import VisionScene
-from tubetalk.infrastructure.repositories.chroma_vision import (
+from jesseagent.domain.vision import VisionScene
+from jesseagent.infrastructure.repositories.chroma_vision import (
     ChromaVisionIndexRepository,
     format_scene_document,
 )
-from tubetalk.ports.vision_index_repository import VisionIndexRepositoryError
+from jesseagent.ports.vision_index_repository import VisionIndexRepositoryError
 
 
 class FakeEmbeddingProvider:
@@ -36,7 +36,7 @@ def _make_store(
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     mocker.patch(
-        "tubetalk.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
+        "jesseagent.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
         return_value=client,
     )
     store = ChromaVisionIndexRepository(

@@ -4,12 +4,12 @@ from typing import Any
 
 import pytest
 
-from tubetalk.agent.retriever import HybridRetrievalError, HybridRetriever, _rrf_fuse
-from tubetalk.domain.retrieval import RetrievalHit
-from tubetalk.domain.transcript import Transcript, TranscriptSegment
-from tubetalk.domain.vision import VisionScene
-from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
-from tubetalk.ports.vision_index_repository import VisionVectorIndexStatus
+from jesseagent.agent.retriever import HybridRetrievalError, HybridRetriever, _rrf_fuse
+from jesseagent.domain.retrieval import RetrievalHit
+from jesseagent.domain.transcript import Transcript, TranscriptSegment
+from jesseagent.domain.vision import VisionScene
+from jesseagent.ports.transcript_index_repository import TranscriptIndexStatus
+from jesseagent.ports.vision_index_repository import VisionVectorIndexStatus
 
 
 def _hit(source_id: str, source: str, rank: int, start: float = 0) -> RetrievalHit:
@@ -44,7 +44,7 @@ def test_retriever_requires_both_current_indexes(mocker: Any) -> None:
     vision_repo.get_index_status.return_value = VisionVectorIndexStatus(state="stale")
     retriever = HybridRetriever(embeddings, transcript_repo, vision_repo)
 
-    with pytest.raises(HybridRetrievalError, match="Ask TubeTalk to process"):
+    with pytest.raises(HybridRetrievalError, match="Ask JesseAgent to process"):
         retriever.retrieve(
             "what happened?",
             Transcript(segments=(TranscriptSegment(start_sec=0, text="hello"),)),

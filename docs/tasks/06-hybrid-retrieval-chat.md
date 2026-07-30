@@ -10,6 +10,6 @@ Pydantic `BaseModel` while preserving the existing cache and manifest schemas.
 ## Checklist
 
 - [x] **Check 6.1**: Add dual Chroma retrieval, RRF, grounded Gemini answers,
-  `tubetalk chat [video_id]`, and Pydantic model migration with mocked tests.
+  `jesseagent chat [video_id]`, and Pydantic model migration with mocked tests.
 - [x] **Check 6.2**: Run `poetry run poe check`.
 - [x] **Check 6.3**: Review and commit the task.

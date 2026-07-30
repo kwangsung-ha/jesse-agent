@@ -1,8 +1,8 @@
-# System Design Specification: TubeTalk
+# System Design Specification: JesseAgent
 
 ## 1. 시스템 개요
 
-TubeTalk는 YouTube 영상의 자막과 Gemini가 생성한 시각 장면 설명을 영상별 로컬
+JesseAgent는 YouTube 영상의 자막과 Gemini가 생성한 시각 장면 설명을 영상별 로컬
 캐시와 ChromaDB에 저장하는 자연어 CLI Agent다. Agent는 Gemini native function calling으로
 수집·인덱싱·요약·상태 조회·하이브리드 Q&A 도구를 선택하고, 결정론적 서비스 코드가 실행한다.
 
@@ -63,7 +63,7 @@ sequenceDiagram
 ## 3. 구현 구조
 
 ```text
-tubetalk/
+jesseagent/
 ├── bootstrap.py                    # Settings 기반 production wiring
 ├── cli/main.py                     # REPL 및 단발성 자연어 Typer entry point
 ├── core/
@@ -123,8 +123,8 @@ Whisper fallback, 오디오 처리, 로컬 영상 다운로드는 구현되어 �
 
 | 실행 | 동작 |
 | --- | --- |
-| `tubetalk` | 멀티턴 자연어 REPL을 시작한다. |
-| `tubetalk "요청"` | 한 자연어 요청을 처리하고 종료한다. |
+| `jesseagent` | 멀티턴 자연어 REPL을 시작한다. |
+| `jesseagent "요청"` | 한 자연어 요청을 처리하고 종료한다. |
 
 Agent는 `process_video`, `list_videos`, `get_video_status`, `get_summary`,
 `answer_video_question`만 호출할 수 있다. 도구 입력은 Pydantic schema로 검증하고, 서비스
@@ -133,13 +133,13 @@ Agent는 `process_video`, `list_videos`, `get_video_status`, `get_summary`,
 
 ### 디버그 관찰성 및 프롬프트
 
-Loguru는 CLI entry point에서 한 번만 설정되며, `tubetalk` 네임스페이스는 기본적으로
-비활성화된다. `tubetalk --debug "요청"`은 stderr에 cache·loader·Chroma·서비스·검색
+Loguru는 CLI entry point에서 한 번만 설정되며, `jesseagent` 네임스페이스는 기본적으로
+비활성화된다. `jesseagent --debug "요청"`은 stderr에 cache·loader·Chroma·서비스·검색
 단계와 렌더링된 Gemini 프롬프트를 기록한다. `--debug --verbose`는 TRACE 레벨의 원본 모델
 응답도 추가한다. 로그에는 API 키·임베딩 벡터를 기록하지 않지만, 렌더링된 요약 프롬프트에는
 전체 자막 원문이 포함되고 채팅 프롬프트에는 질문·검색 근거가 포함될 수 있으므로 진단 목적으로만 사용한다.
 
-`tubetalk/prompts/`는 요약·비전·채팅과 각 수정 요청의 버전별 템플릿을 제공한다.
+`jesseagent/prompts/`는 요약·비전·채팅과 각 수정 요청의 버전별 템플릿을 제공한다.
 `SUMMARY_PROMPT_VERSION`, `VISION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION`,
 `AGENT_PROMPT_VERSION`은 기능별 템플릿을
 선택한다. 요약·비전의 선택 값은 기존 manifest `prompt_version` 최신성 판정에 사용한다.
@@ -193,7 +193,7 @@ graph TD
   이벤트에 저장하지 않는다.
 - 모델 컨텍스트는 설정된 턴·크기 예산을 넘기면 결정론적으로 축약한다. 사용자 출력의
   인용과 근거는 축약하지 않는다.
-- `AgentRunTrigger` port가 이 lifecycle API를 선언한다. 현재 `tubetalk-runs`가 이를
+- `AgentRunTrigger` port가 이 lifecycle API를 선언한다. 현재 `jesseagent-runs`가 이를
   호출하며, 미래 HTTP endpoint는 `launch(request)`, webhook은 검증된 payload를 request로
   변환해 `launch`, batch는 저장된 `run_id`로 `resume`만 호출한다. 어느 adapter도 모델 loop,
   이벤트 기록, 승인 상태 전이를 직접 구현하지 않는다.

@@ -3,7 +3,7 @@
 ## Overview
 
 Upgrade the natural-language CLI Agent from a process-local tool loop to a
-durable, resumable execution system while retaining TubeTalk's deterministic
+durable, resumable execution system while retaining JesseAgent's deterministic
 service boundary. The implementation is CLI-first: SQLite persists runs under
 `DATA_DIR`, and a reusable application boundary leaves HTTP, webhook, and batch
 adapters for later work.

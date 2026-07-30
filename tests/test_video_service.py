@@ -5,36 +5,36 @@ from typing import Any
 
 import pytest
 
-from tubetalk.core.cache import LocalCacheManager
-from tubetalk.domain.retrieval import ChatAnswer, Citation, RetrievalHit
-from tubetalk.domain.summary import (
+from jesseagent.core.cache import LocalCacheManager
+from jesseagent.domain.retrieval import ChatAnswer, Citation, RetrievalHit
+from jesseagent.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     Chapter,
     SummaryCacheEntry,
     SummaryManifest,
     VideoSummary,
 )
-from tubetalk.domain.transcript import Transcript, TranscriptSegment
-from tubetalk.domain.transcript_index import transcript_sha256
-from tubetalk.domain.video import CachedVideo, VideoMetadata
-from tubetalk.domain.vision import (
+from jesseagent.domain.transcript import Transcript, TranscriptSegment
+from jesseagent.domain.transcript_index import transcript_sha256
+from jesseagent.domain.video import CachedVideo, VideoMetadata
+from jesseagent.domain.vision import (
     VISION_SCHEMA_VERSION,
     VisionIndexEntry,
     VisionManifest,
     VisionScene,
 )
-from tubetalk.pipeline.loader import (
+from jesseagent.pipeline.loader import (
     InvalidVideoUrlError as LoaderInvalidVideoUrlError,
 )
-from tubetalk.pipeline.loader import (
+from jesseagent.pipeline.loader import (
     VideoLoaderError,
 )
-from tubetalk.ports.summary import SummaryProviderError
-from tubetalk.ports.transcript_index_repository import TranscriptIndexStatus
-from tubetalk.ports.vision import VisionProviderError
-from tubetalk.ports.vision_index_repository import VisionVectorIndexStatus
-from tubetalk.services.stages import VisionIndexingStage
-from tubetalk.services.video_service import (
+from jesseagent.ports.summary import SummaryProviderError
+from jesseagent.ports.transcript_index_repository import TranscriptIndexStatus
+from jesseagent.ports.vision import VisionProviderError
+from jesseagent.ports.vision_index_repository import VisionVectorIndexStatus
+from jesseagent.services.stages import VisionIndexingStage
+from jesseagent.services.video_service import (
     ChatUnavailableError,
     InvalidVideoUrlError,
     SummaryGenerationError,
@@ -309,7 +309,7 @@ def test_get_summary_requires_generate_for_missing_cache(
     cache = LocalCacheManager(data_dir=tmp_path)
     _save_video(cache, "video123")
 
-    with pytest.raises(SummaryUnavailableError, match="Ask TubeTalk"):
+    with pytest.raises(SummaryUnavailableError, match="Ask JesseAgent"):
         service.get_summary("video123")
 
     result = service.get_summary("video123", generate=True)

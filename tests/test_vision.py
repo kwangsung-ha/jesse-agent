@@ -5,11 +5,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from tubetalk.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
-from tubetalk.infrastructure.visions.gemini import (
+from jesseagent.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
+from jesseagent.infrastructure.visions.gemini import (
     GeminiVisionAnalyzer,
 )
-from tubetalk.ports.vision import VisionProviderError
+from jesseagent.ports.vision import VisionProviderError
 
 
 def test_describe_sends_public_video_and_returns_ordered_scenes() -> None:

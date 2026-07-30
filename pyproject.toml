@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "tubetalk"
+name = "jesseagent"
 version = "0.1.0"
-description = "YouTube Video Intelligence Agent (CLI & Multimodal RAG)"
-authors = ["TubeTalk Team"]
+description = "Personal knowledge and task Agent"
+authors = ["Jesse"]
 readme = "docs/README.md"
-packages = [{ include = "tubetalk" }]
-include = ["tubetalk/prompts/**/*.txt"]
+packages = [{ include = "jesseagent" }]
+include = ["jesseagent/prompts/**/*.txt"]
 
 
 [tool.pyright]
@@ -14,8 +14,8 @@ venv = ".venv"
 
 
 [tool.poetry.scripts]
-tubetalk = "tubetalk.cli.main:app"
-tubetalk-runs = "tubetalk.cli.runs:app"
+jesseagent = "jesseagent.cli.main:app"
+jesseagent-runs = "jesseagent.cli.runs:app"
 
 [tool.poetry.dependencies]
 python = "3.12.*"
@@ -45,9 +45,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.poe.tasks]
 format-check = "ruff format --check ."
 format = "ruff format ."
-static = "mypy --strict tubetalk"
+static = "mypy --strict jesseagent"
 lint = "ruff check ."
-test = "pytest --cov=tubetalk --cov-report=term-missing --cov-fail-under=90"
+test = "pytest --cov=jesseagent --cov-report=term-missing --cov-fail-under=90"
 check = ["format-check", "lint", "static", "test"]
 
 [tool.ruff]
@@ -62,4 +62,4 @@ python_version = "3.12"
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
-files = ["tubetalk"]
+files = ["jesseagent"]

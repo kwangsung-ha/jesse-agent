@@ -1,1 +1,1 @@
-"""Test package for TubeTalk."""
+"""Test package for JesseAgent."""

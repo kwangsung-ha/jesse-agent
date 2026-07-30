@@ -2,7 +2,7 @@
 
 import pytest
 
-from tubetalk.domain.summary import Chapter, VideoSummary
+from jesseagent.domain.summary import Chapter, VideoSummary
 
 
 def test_video_summary_accepts_ordered_chapters() -> None:

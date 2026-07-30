@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from tubetalk.domain.retrieval import RetrievalHit
-from tubetalk.infrastructure.chats.gemini import GeminiChatProvider
-from tubetalk.ports.chat import ChatProviderError
+from jesseagent.domain.retrieval import RetrievalHit
+from jesseagent.infrastructure.chats.gemini import GeminiChatProvider
+from jesseagent.ports.chat import ChatProviderError
 
 
 def _evidence() -> tuple[RetrievalHit, ...]:

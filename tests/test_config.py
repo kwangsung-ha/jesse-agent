@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from tubetalk import __version__
-from tubetalk.core.config import Settings, settings
+from jesseagent import __version__
+from jesseagent.core.config import Settings, settings
 
 
 def test_package_version():

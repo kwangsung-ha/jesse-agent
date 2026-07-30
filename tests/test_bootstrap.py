@@ -3,20 +3,20 @@
 from pathlib import Path
 from typing import Any
 
-from tubetalk.bootstrap import create_agent_session, create_video_service
-from tubetalk.core.config import Settings
-from tubetalk.domain.transcript_index import TranscriptChunkPolicy
+from jesseagent.bootstrap import create_agent_session, create_video_service
+from jesseagent.core.config import Settings
+from jesseagent.domain.transcript_index import TranscriptChunkPolicy
 
 
 def test_create_video_service_selects_gemini_and_chroma(
     tmp_path: Path, mocker: Any
 ) -> None:
     """The default supported settings build the installed adapters lazily."""
-    gemini_provider = mocker.patch("tubetalk.bootstrap.GeminiEmbeddingProvider")
-    summary_provider = mocker.patch("tubetalk.bootstrap.GeminiSummaryProvider")
-    vision_analyzer = mocker.patch("tubetalk.bootstrap.GeminiVisionAnalyzer")
+    gemini_provider = mocker.patch("jesseagent.bootstrap.GeminiEmbeddingProvider")
+    summary_provider = mocker.patch("jesseagent.bootstrap.GeminiSummaryProvider")
+    vision_analyzer = mocker.patch("jesseagent.bootstrap.GeminiVisionAnalyzer")
     chroma_repository = mocker.patch(
-        "tubetalk.bootstrap.ChromaTranscriptIndexRepository"
+        "jesseagent.bootstrap.ChromaTranscriptIndexRepository"
     )
     config = Settings(
         data_dir=tmp_path,
@@ -66,8 +66,8 @@ def test_create_video_service_selects_gemini_and_chroma(
 def test_create_agent_session_wires_configured_model_and_tools(
     tmp_path: Path, mocker: Any
 ) -> None:
-    agent_model = mocker.patch("tubetalk.bootstrap.GeminiAgentModel")
-    executor = mocker.patch("tubetalk.bootstrap.VideoToolExecutor")
+    agent_model = mocker.patch("jesseagent.bootstrap.GeminiAgentModel")
+    executor = mocker.patch("jesseagent.bootstrap.VideoToolExecutor")
     config = Settings(data_dir=tmp_path, gemini_api_key="key", agent_max_steps=3)
 
     session = create_agent_session(config)

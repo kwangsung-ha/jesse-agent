@@ -5,16 +5,16 @@ from typing import Any
 
 import pytest
 
-from tubetalk.agent.contracts import AgentDecision, ToolCall, ToolResult
-from tubetalk.agent.orchestrator import AgentSession
-from tubetalk.agent.reducer import AgentRunReductionError, model_messages, reduce_run
-from tubetalk.agent.runs import (
+from jesseagent.agent.contracts import AgentDecision, ToolCall, ToolResult
+from jesseagent.agent.orchestrator import AgentSession
+from jesseagent.agent.reducer import AgentRunReductionError, model_messages, reduce_run
+from jesseagent.agent.runs import (
     AgentEventType,
     AgentRun,
     AgentRunEvent,
     NewAgentRunEvent,
 )
-from tubetalk.infrastructure.repositories.sqlite_agent_runs import (
+from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
     SQLiteAgentRunRepository,
 )
 

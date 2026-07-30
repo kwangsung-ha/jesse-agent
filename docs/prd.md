@@ -1,8 +1,8 @@
-# PRD: TubeTalk — YouTube Video Intelligence Agent
+# PRD: JesseAgent — YouTube Video Intelligence Agent
 
 ## 1. 프로젝트 개요
 
-- **프로젝트명**: TubeTalk
+- **프로젝트명**: JesseAgent
 - **목적**: YouTube URL의 자막과 시각적 장면 정보를 로컬에 축적하고, 요약·타임스탬프 목차·향후 하이브리드 검색과 Q&A를 제공하는 CLI AI 에이전트
 - **핵심 가치**: 자막만으로 찾기 어려운 화면 속 인물·객체·차트·행동을 비전 장면 설명으로 함께 인덱싱한다.
 
@@ -94,7 +94,7 @@ data/
 ### Phase 3: 하이브리드 검색 및 대화형 CLI — 완료
 
 - Dual Retriever, RRF, 타임스탬프 인용 검증
-- 멀티턴 자연어 `tubetalk` Agent와 단발성 `tubetalk "요청"`
+- 멀티턴 자연어 `jesseagent` Agent와 단발성 `jesseagent "요청"`
 
 ## 6. 성공 지표
 

@@ -7,18 +7,18 @@ from typing import Any
 
 import pytest
 
-from tubetalk.domain.transcript import Transcript, TranscriptSegment
-from tubetalk.domain.transcript_index import (
+from jesseagent.domain.transcript import Transcript, TranscriptSegment
+from jesseagent.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
     TranscriptChunkPolicy,
     chunk_transcript,
     format_document,
 )
-from tubetalk.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
-from tubetalk.infrastructure.repositories.chroma_transcript import (
+from jesseagent.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
+from jesseagent.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
 )
-from tubetalk.ports.transcript_index_repository import TranscriptIndexRepositoryError
+from jesseagent.ports.transcript_index_repository import TranscriptIndexRepositoryError
 
 
 class FakeEmbeddingProvider:
@@ -53,7 +53,7 @@ def _make_store(
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     persistent_client = mocker.patch(
-        "tubetalk.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
+        "jesseagent.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
         return_value=client,
     )
 
@@ -181,7 +181,7 @@ def test_failed_generation_keeps_previous_transcript_index_active(
     store, client, collection = _make_store(tmp_path, mocker)
     store.manifest_path.write_text('{"collection_name": "transcript_collection"}')
     mocker.patch(
-        "tubetalk.infrastructure.repositories.chroma_base.os.replace",
+        "jesseagent.infrastructure.repositories.chroma_base.os.replace",
         side_effect=OSError("write failed"),
     )
 

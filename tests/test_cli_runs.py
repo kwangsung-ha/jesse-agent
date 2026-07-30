@@ -4,7 +4,7 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from tubetalk.cli.runs import app
+from jesseagent.cli.runs import app
 
 runner = CliRunner()
 
@@ -19,7 +19,7 @@ def test_run_commands_delegate_to_service(mocker: Any) -> None:
     service.reject.return_value = state
     service.resume.return_value = mocker.Mock(response="resumed")
     factory = mocker.patch(
-        "tubetalk.cli.runs.create_agent_run_service", return_value=service
+        "jesseagent.cli.runs.create_agent_run_service", return_value=service
     )
 
     assert runner.invoke(app, ["list"]).exit_code == 0

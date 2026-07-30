@@ -1,7 +1,8 @@
-# TubeTalk
+# JesseAgent
 
-YouTube 영상의 자막과 시각적 장면을 로컬에 저장하고, Gemini와 ChromaDB로
-요약·타임스탬프 목차·검색용 인덱스를 만드는 Python CLI입니다.
+JesseAgent는 Jesse의 개인 지식과 작업을 돕는 Python CLI Agent입니다. 현재는
+YouTube 영상 소스를 수집·색인·질의할 수 있으며, Obsidian을 비롯한 개인 지식 소스와
+승인 기반 작업 Sink를 추가할 예정입니다.
 
 > 영상 처리, 캐시 상태 확인, 요약 조회, 근거 인용을 포함한 대화형 Q&A를 사용할 수 있습니다.
 
@@ -26,7 +27,7 @@ YouTube 영상의 자막과 시각적 장면을 로컬에 저장하고, Gemini�
 
 ```bash
 git clone <repository-url>
-cd tubetalk
+cd jesseagent
 poetry install
 ```
 
@@ -44,17 +45,17 @@ export GEMINI_API_KEY=your_api_key
 
 ## 사용법
 
-`tubetalk`은 자연어 요청을 안전한 내부 도구 호출로 바꾸는 멀티턴 Agent입니다.
+`jesseagent`은 자연어 요청을 안전한 내부 도구 호출로 바꾸는 멀티턴 Agent입니다.
 
 ```bash
 # 대화 세션
-poetry run tubetalk
+poetry run jesseagent
 
 # 한 번 요청하고 종료
-poetry run tubetalk 'https://www.youtube.com/watch?v=VIDEO_ID 를 처리하고 요약해줘'
+poetry run jesseagent 'https://www.youtube.com/watch?v=VIDEO_ID 를 처리하고 요약해줘'
 
 # 단계, 프롬프트, 검색 근거를 stderr로 확인
-poetry run tubetalk --debug '캐시된 영상 목록을 보여줘'
+poetry run jesseagent --debug '캐시된 영상 목록을 보여줘'
 ```
 
 예를 들어 “이 URL을 처리해줘”, “캐시된 영상 목록을 보여줘”, “video_id의 요약을
@@ -66,12 +67,12 @@ poetry run tubetalk --debug '캐시된 영상 목록을 보여줘'
 명령으로 조회·승인·재개·삭제할 수 있다.
 
 ```bash
-poetry run tubetalk-runs list
-poetry run tubetalk-runs status RUN_ID
-poetry run tubetalk-runs approve RUN_ID
-poetry run tubetalk-runs resume RUN_ID
-poetry run tubetalk-runs reject RUN_ID
-poetry run tubetalk-runs delete RUN_ID
+poetry run jesseagent-runs list
+poetry run jesseagent-runs status RUN_ID
+poetry run jesseagent-runs approve RUN_ID
+poetry run jesseagent-runs resume RUN_ID
+poetry run jesseagent-runs reject RUN_ID
+poetry run jesseagent-runs delete RUN_ID
 ```
 
 이벤트에는 API 키, 전체 렌더링 프롬프트, 자막 원문을 저장하지 않는다. 실행 이력은
@@ -80,7 +81,7 @@ poetry run tubetalk-runs delete RUN_ID
 전체 명령 목록은 다음으로 확인할 수 있습니다.
 
 ```bash
-poetry run tubetalk --help
+poetry run jesseagent --help
 ```
 
 ## 설정
@@ -109,8 +110,8 @@ poetry run tubetalk --help
 | `AGENT_CONTEXT_MAX_MESSAGES` | `24` | 모델에 전달할 최대 최근 메시지 수 |
 | `AGENT_CONTEXT_MAX_CHARACTERS` | `12000` | 모델에 전달할 최대 최근 문맥 문자 수 |
 
-전체 설정값은 [`tubetalk/core/config.py`](tubetalk/core/config.py)에서 확인할 수 있습니다.
-프롬프트는 `tubetalk/prompts/`의 버전 파일로 관리합니다. 템플릿을 변경할 때는 새 버전을
+전체 설정값은 [`jesseagent/core/config.py`](jesseagent/core/config.py)에서 확인할 수 있습니다.
+프롬프트는 `jesseagent/prompts/`의 버전 파일로 관리합니다. 템플릿을 변경할 때는 새 버전을
 추가하고 해당 환경 변수를 바꾸세요. 디버그 로그에는 자막·질문·근거가 포함될 수 있습니다.
 
 ## 로컬 데이터 구조
@@ -144,7 +145,7 @@ poetry run poe test
 poetry run poe check
 ```
 
-품질 게이트는 Ruff 포맷 검사, Ruff 린트, 테스트와 `tubetalk` 기준 90% 이상
+품질 게이트는 Ruff 포맷 검사, Ruff 린트, 테스트와 `jesseagent` 기준 90% 이상
 커버리지를 실행합니다.
 
 ## 문서

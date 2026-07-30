@@ -1,6 +1,6 @@
-# AGENTS.md - TubeTalk Coding Agent Rules & Quality Gate
+# AGENTS.md - JesseAgent Coding Agent Rules & Quality Gate
 
-본 문서는 TubeTalk 프로젝트에 참여하는 모든 코딩 에이전트(AI Agent)가 반드시 준수해야 하는 개발 규칙 및 품질 검증 가이드라인입니다.
+본 문서는 JesseAgent 프로젝트에 참여하는 모든 코딩 에이전트(AI Agent)가 반드시 준수해야 하는 개발 규칙 및 품질 검증 가이드라인입니다.
 
 ---
 
@@ -16,7 +16,7 @@ poetry run poe check
 1. **`poetry run poe format`** (또는 `format-check`): 코드 포맷팅 (Ruff)
 2. **`poetry run poe lint`**: Ruff 린팅
 3. **`poetry run poe static`**: Mypy strict 정적 타입 분석
-4. **`poetry run poe test`**: 유닛 테스트 실행 및 **커버리지 90% 이상** 통과 (`pytest --cov=tubetalk --cov-fail-under=90`)
+4. **`poetry run poe test`**: 유닛 테스트 실행 및 **커버리지 90% 이상** 통과 (`pytest --cov=jesseagent --cov-fail-under=90`)
 
 ---
 

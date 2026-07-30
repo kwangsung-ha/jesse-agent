@@ -3,8 +3,8 @@
 from types import SimpleNamespace
 from typing import Any
 
-from tubetalk.agent.contracts import AgentMessage
-from tubetalk.infrastructure.agents.gemini import GeminiAgentModel
+from jesseagent.agent.contracts import AgentMessage
+from jesseagent.infrastructure.agents.gemini import GeminiAgentModel
 
 
 def test_gemini_agent_translates_native_function_call(mocker: Any) -> None:

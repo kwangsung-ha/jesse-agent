@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from tubetalk.agent.runs import AgentEventType, AgentRun, NewAgentRunEvent
-from tubetalk.infrastructure.repositories.sqlite_agent_runs import (
+from jesseagent.agent.runs import AgentEventType, AgentRun, NewAgentRunEvent
+from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
     SQLiteAgentRunRepository,
 )
-from tubetalk.services.agent_run_service import (
+from jesseagent.services.agent_run_service import (
     AgentRunService,
     AgentRunTransitionError,
 )
