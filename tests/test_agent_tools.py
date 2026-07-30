@@ -25,6 +25,8 @@ def test_process_tool_calls_service_and_sets_current_video(mocker: Any) -> None:
     )
 
     assert result.ok is True
+    assert result.call_id
+    assert result.user_summary == "process_video completed."
     assert result.content["video_id"] == "video1"
     assert tools.current_video_id == "video1"
     service.process.assert_called_once_with("https://youtu.be/video1")
@@ -47,6 +49,9 @@ def test_tool_validation_and_service_errors_are_returned_as_context(
     assert "Invalid tool arguments" in invalid.content["error"]
     assert missing.content["error"] == "missing"
     assert unknown.content["error"] == "Unknown tool 'made_up_tool'."
+    assert invalid.error_code == "invalid_arguments"
+    assert missing.error_code == "video_service_error"
+    assert unknown.next_action == "Choose one of the declared tools."
 
 
 def test_tool_declarations_expose_only_bounded_video_operations(mocker: Any) -> None:

@@ -40,7 +40,7 @@ adapters for later work.
 - [x] **Check 12.5**: Add configurable context budgets and deterministic compact
   views for conversation history and large tool results, with preservation tests
   for current-video context and citations.
-- [ ] **Check 12.6**: Replace generic tool-result dictionaries with per-tool
+- [x] **Check 12.6**: Replace generic tool-result dictionaries with per-tool
   validated input/output contracts, call IDs, compact error codes, and safe
   recommended next actions.
 - [ ] **Check 12.7**: Add an Agent-visible approval request tool and policy:

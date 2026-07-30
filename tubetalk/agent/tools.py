@@ -64,23 +64,36 @@ class VideoToolExecutor:
         """Validate a model request and return expected errors as context."""
         entry = self._tools.get(call.name)
         if entry is None:
-            return ToolResult(
-                name=call.name,
-                ok=False,
-                content={"error": f"Unknown tool '{call.name}'."},
+            return _failure(
+                call,
+                code="unknown_tool",
+                message=f"Unknown tool '{call.name}'.",
+                next_action="Choose one of the declared tools.",
             )
         input_type, handler = entry
         try:
             result = handler(input_type.model_validate(call.arguments))
         except ValidationError as error:
-            return ToolResult(
-                name=call.name,
-                ok=False,
-                content={"error": f"Invalid tool arguments: {error}"},
+            return _failure(
+                call,
+                code="invalid_arguments",
+                message=f"Invalid tool arguments: {error}",
+                next_action="Correct the tool arguments and try again.",
             )
         except VideoServiceError as error:
-            return ToolResult(name=call.name, ok=False, content={"error": str(error)})
-        return ToolResult(name=call.name, ok=True, content=result)
+            return _failure(
+                call,
+                code="video_service_error",
+                message=str(error),
+                next_action="Explain the issue and suggest a valid video request.",
+            )
+        return ToolResult(
+            name=call.name,
+            call_id=call.call_id,
+            ok=True,
+            content=result,
+            user_summary=f"{call.name} completed.",
+        )
 
     def _process_video(self, payload: BaseModel) -> dict[str, Any]:
         result = self._service.process(ProcessVideoInput.model_validate(payload).url)
@@ -165,3 +178,18 @@ def _status_data(status: VideoStatus) -> dict[str, Any]:
         "summary_state": status.summary_state,
         "vision_index_state": status.vision_index_state,
     }
+
+
+def _failure(
+    call: ToolCall, *, code: str, message: str, next_action: str
+) -> ToolResult:
+    """Return one compact, typed failure contract for Agent recovery."""
+    return ToolResult(
+        name=call.name,
+        call_id=call.call_id,
+        ok=False,
+        content={"error": message},
+        error_code=code,
+        user_summary=message,
+        next_action=next_action,
+    )
