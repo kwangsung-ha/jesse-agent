@@ -61,6 +61,22 @@ poetry run tubetalk --debug '캐시된 영상 목록을 보여줘'
 새로 만들어줘”, “방금 영상에서 그래프가 나오는 부분은 언제야?”라고 요청할 수 있습니다.
 처리 결과는 `data/<video_id>/`에 캐시되며, 답변에는 검증된 타임스탬프 인용이 표시됩니다.
 
+비용 또는 캐시 변경을 수반하는 영상 처리·요약 재생성은 명시적 승인이 필요하다. 승인
+대기·완료·실패 실행은 `DATA_DIR/agent_runs.sqlite3`에 이벤트 로그로 저장되므로, 다음
+명령으로 조회·승인·재개·삭제할 수 있다.
+
+```bash
+poetry run tubetalk-runs list
+poetry run tubetalk-runs status RUN_ID
+poetry run tubetalk-runs approve RUN_ID
+poetry run tubetalk-runs resume RUN_ID
+poetry run tubetalk-runs reject RUN_ID
+poetry run tubetalk-runs delete RUN_ID
+```
+
+이벤트에는 API 키, 전체 렌더링 프롬프트, 자막 원문을 저장하지 않는다. 실행 이력은
+`delete` 명령으로 명시적으로 제거할 때까지 보관된다.
+
 전체 명령 목록은 다음으로 확인할 수 있습니다.
 
 ```bash
@@ -90,6 +106,8 @@ poetry run tubetalk --help
 | `CHAT_PROMPT_VERSION` | `grounded-chat-v1` | 대화 템플릿 버전 |
 | `AGENT_PROMPT_VERSION` | `tool-agent-v1` | 자연어 도구 호출 Agent 템플릿 버전 |
 | `AGENT_MAX_STEPS` | `8` | 요청당 최대 도구 호출 단계 수 |
+| `AGENT_CONTEXT_MAX_MESSAGES` | `24` | 모델에 전달할 최대 최근 메시지 수 |
+| `AGENT_CONTEXT_MAX_CHARACTERS` | `12000` | 모델에 전달할 최대 최근 문맥 문자 수 |
 
 전체 설정값은 [`tubetalk/core/config.py`](tubetalk/core/config.py)에서 확인할 수 있습니다.
 프롬프트는 `tubetalk/prompts/`의 버전 파일로 관리합니다. 템플릿을 변경할 때는 새 버전을
@@ -105,6 +123,7 @@ data/
     ├── summary.json         # 요약과 타임스탬프 목차
     ├── vision_index.json    # Gemini가 생성한 시각적 장면 설명
     └── chromadb/            # 자막·비전 벡터 인덱스
+├── agent_runs.sqlite3       # 재개 가능한 Agent 실행 이벤트
 ```
 
 `data/`와 `.env`는 Git에서 제외됩니다.

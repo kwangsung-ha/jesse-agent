@@ -62,6 +62,6 @@
   - 멀티턴 REPL 및 단발성 CLI 요청 지원
 
 ## Phase 6: Durable 12-Factor Agent Reliability
-- [i] **Task 12: 12-Factor Agent Reliability Upgrade** `docs/tasks/12-agent-reliability.md`
+- [x] **Task 12: 12-Factor Agent Reliability Upgrade** `docs/tasks/12-agent-reliability.md`
   - SQLite append-only run/event log, reducer 기반 상태 재구성, pause/resume
   - 컨텍스트 예산, 타입화된 도구 계약, 승인 흐름, CLI run 관리

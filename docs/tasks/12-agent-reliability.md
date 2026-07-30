@@ -52,7 +52,7 @@ adapters for later work.
 - [x] **Check 12.9**: Define the trigger port used by the CLI and document how a
   future HTTP, webhook, or batch adapter invokes the same run service without
   duplicating Agent flow.
-- [ ] **Check 12.10**: Update user-facing documentation; cover persistence,
+- [x] **Check 12.10**: Update user-facing documentation; cover persistence,
   state transitions, resume idempotency, approvals, compaction, tool contracts,
   and redaction with mocked unit tests; run the quality gate.
 
