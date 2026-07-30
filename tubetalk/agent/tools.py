@@ -30,6 +30,13 @@ class EmptyInput(BaseModel):
     """Arguments for a parameter-free tool."""
 
 
+class ApprovalRequestInput(BaseModel):
+    """A model request to pause before a side-effecting video operation."""
+
+    tool_name: str = Field(min_length=1)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
 ToolHandler = Callable[[BaseModel], dict[str, Any]]
 
 
@@ -46,6 +53,7 @@ class VideoToolExecutor:
             "get_video_status": (VideoIdInput, self._get_video_status),
             "get_summary": (SummaryInput, self._get_summary),
             "answer_video_question": (VideoQuestionInput, self._answer_question),
+            "request_approval": (ApprovalRequestInput, self._request_approval),
         }
 
     @property
@@ -64,23 +72,43 @@ class VideoToolExecutor:
         """Validate a model request and return expected errors as context."""
         entry = self._tools.get(call.name)
         if entry is None:
-            return ToolResult(
-                name=call.name,
-                ok=False,
-                content={"error": f"Unknown tool '{call.name}'."},
+            return _failure(
+                call,
+                code="unknown_tool",
+                message=f"Unknown tool '{call.name}'.",
+                next_action="Choose one of the declared tools.",
             )
         input_type, handler = entry
         try:
+            if self._requires_approval(call):
+                return _failure(
+                    call,
+                    code="approval_required",
+                    message="This operation requires explicit approval.",
+                    next_action="Request approval before executing this operation.",
+                )
             result = handler(input_type.model_validate(call.arguments))
         except ValidationError as error:
-            return ToolResult(
-                name=call.name,
-                ok=False,
-                content={"error": f"Invalid tool arguments: {error}"},
+            return _failure(
+                call,
+                code="invalid_arguments",
+                message=f"Invalid tool arguments: {error}",
+                next_action="Correct the tool arguments and try again.",
             )
         except VideoServiceError as error:
-            return ToolResult(name=call.name, ok=False, content={"error": str(error)})
-        return ToolResult(name=call.name, ok=True, content=result)
+            return _failure(
+                call,
+                code="video_service_error",
+                message=str(error),
+                next_action="Explain the issue and suggest a valid video request.",
+            )
+        return ToolResult(
+            name=call.name,
+            call_id=call.call_id,
+            ok=True,
+            content=result,
+            user_summary=f"{call.name} completed.",
+        )
 
     def _process_video(self, payload: BaseModel) -> dict[str, Any]:
         result = self._service.process(ProcessVideoInput.model_validate(payload).url)
@@ -137,6 +165,19 @@ class VideoToolExecutor:
             ],
         }
 
+    def _request_approval(self, payload: BaseModel) -> dict[str, Any]:
+        request = ApprovalRequestInput.model_validate(payload)
+        call = ToolCall(name=request.tool_name, arguments=request.arguments)
+        if not self._requires_approval(call):
+            raise VideoServiceError("This operation does not require approval")
+        return {"tool_name": request.tool_name, "arguments": request.arguments}
+
+    @staticmethod
+    def _requires_approval(call: ToolCall) -> bool:
+        if call.name == "process_video":
+            return True
+        return call.name == "get_summary" and call.arguments.get("generate") is True
+
 
 _TOOL_DESCRIPTIONS = {
     "process_video": (
@@ -149,6 +190,9 @@ _TOOL_DESCRIPTIONS = {
     ),
     "answer_video_question": (
         "Answer one grounded question about a cached, indexed video."
+    ),
+    "request_approval": (
+        "Request explicit approval before a costly or mutating operation."
     ),
 }
 
@@ -165,3 +209,18 @@ def _status_data(status: VideoStatus) -> dict[str, Any]:
         "summary_state": status.summary_state,
         "vision_index_state": status.vision_index_state,
     }
+
+
+def _failure(
+    call: ToolCall, *, code: str, message: str, next_action: str
+) -> ToolResult:
+    """Return one compact, typed failure contract for Agent recovery."""
+    return ToolResult(
+        name=call.name,
+        call_id=call.call_id,
+        ok=False,
+        content={"error": message},
+        error_code=code,
+        user_summary=message,
+        next_action=next_action,
+    )

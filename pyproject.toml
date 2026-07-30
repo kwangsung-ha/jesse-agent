@@ -15,6 +15,7 @@ venv = ".venv"
 
 [tool.poetry.scripts]
 tubetalk = "tubetalk.cli.main:app"
+tubetalk-runs = "tubetalk.cli.runs:app"
 
 [tool.poetry.dependencies]
 python = "3.12.*"

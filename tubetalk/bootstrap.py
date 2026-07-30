@@ -2,8 +2,10 @@
 
 from collections.abc import Callable
 
+from tubetalk.agent.context import AgentContextBudget
 from tubetalk.agent.contracts import ToolResult
 from tubetalk.agent.orchestrator import AgentSession
+from tubetalk.agent.runs import AgentRun
 from tubetalk.agent.tools import VideoToolExecutor
 from tubetalk.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from tubetalk.core.config import Settings, settings
@@ -17,6 +19,9 @@ from tubetalk.infrastructure.repositories.chroma_transcript import (
 from tubetalk.infrastructure.repositories.chroma_vision import (
     ChromaVisionIndexRepository,
 )
+from tubetalk.infrastructure.repositories.sqlite_agent_runs import (
+    SQLiteAgentRunRepository,
+)
 from tubetalk.infrastructure.summaries.gemini import GeminiSummaryProvider
 from tubetalk.infrastructure.visions.gemini import GeminiVisionAnalyzer
 from tubetalk.pipeline.loader import YouTubeLoader
@@ -26,6 +31,7 @@ from tubetalk.ports.summary import SummaryProvider
 from tubetalk.ports.transcript_index_repository import TranscriptIndexRepository
 from tubetalk.ports.vision import VisionAnalyzer
 from tubetalk.ports.vision_index_repository import VisionIndexRepository
+from tubetalk.services.agent_run_service import AgentRunService
 from tubetalk.services.video_service import VideoService
 
 
@@ -77,7 +83,34 @@ def create_agent_session(
         tools=VideoToolExecutor(create_video_service(config)),
         max_steps=config.agent_max_steps,
         on_tool_result=on_tool_result,
+        repository=SQLiteAgentRunRepository(config.data_dir / "agent_runs.sqlite3"),
+        context_budget=AgentContextBudget(
+            max_messages=config.agent_context_max_messages,
+            max_characters=config.agent_context_max_characters,
+        ),
     )
+
+
+def create_agent_run_service(config: Settings = settings) -> AgentRunService:
+    """Build the durable run API used by CLI and future trigger adapters."""
+    repository = SQLiteAgentRunRepository(config.data_dir / "agent_runs.sqlite3")
+
+    def sessions(run: AgentRun | None = None) -> AgentSession:
+        return AgentSession(
+            model=GeminiAgentModel(
+                config.gemini_api_key, config.llm_model, config.agent_prompt_version
+            ),
+            tools=VideoToolExecutor(create_video_service(config)),
+            max_steps=config.agent_max_steps,
+            repository=repository,
+            existing_run=run,
+            context_budget=AgentContextBudget(
+                max_messages=config.agent_context_max_messages,
+                max_characters=config.agent_context_max_characters,
+            ),
+        )
+
+    return AgentRunService(repository, sessions)
 
 
 def _embedding_provider_factory(

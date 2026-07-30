@@ -29,6 +29,8 @@ def test_settings_defaults():
     assert s.chat_prompt_version == "grounded-chat-v1"
     assert s.agent_prompt_version == "tool-agent-v1"
     assert s.agent_max_steps == 8
+    assert s.agent_context_max_messages == 24
+    assert s.agent_context_max_characters == 12000
     assert s.embedding_model == "gemini-embedding-2"
     assert s.embedding_dimension == 768
     assert s.embedding_provider == "gemini"

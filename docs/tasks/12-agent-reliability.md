@@ -28,31 +28,31 @@ adapters for later work.
 
 - [x] **Check 12.1**: Add this Task 12 specification, the Phase 6 roadmap entry,
   and the durable-run architecture to the design document.
-- [ ] **Check 12.2**: Add immutable Agent run/event/state contracts and a
+- [x] **Check 12.2**: Add immutable Agent run/event/state contracts and a
   SQLite-backed append-only repository with unit tests for atomic persistence,
   listing, loading, and explicit deletion.
-- [ ] **Check 12.3**: Turn `AgentSession` into an event-driven reducer that
+- [x] **Check 12.3**: Turn `AgentSession` into an event-driven reducer that
   rebuilds state and model context from persisted events; attach run IDs to
   structured diagnostics and add reconstruction tests.
-- [ ] **Check 12.4**: Add a reusable `AgentRunService` with launch, status,
+- [x] **Check 12.4**: Add a reusable `AgentRunService` with launch, status,
   approve, reject, resume, list, and delete operations; enforce state
   transitions and never re-run completed calls on resume.
-- [ ] **Check 12.5**: Add configurable context budgets and deterministic compact
+- [x] **Check 12.5**: Add configurable context budgets and deterministic compact
   views for conversation history and large tool results, with preservation tests
   for current-video context and citations.
-- [ ] **Check 12.6**: Replace generic tool-result dictionaries with per-tool
+- [x] **Check 12.6**: Replace generic tool-result dictionaries with per-tool
   validated input/output contracts, call IDs, compact error codes, and safe
   recommended next actions.
-- [ ] **Check 12.7**: Add an Agent-visible approval request tool and policy:
+- [x] **Check 12.7**: Add an Agent-visible approval request tool and policy:
   read-only operations run immediately, while new paid generation/analysis and
   cache regeneration wait for approval.
-- [ ] **Check 12.8**: Extend the Typer CLI with run inspection, approval,
+- [x] **Check 12.8**: Extend the Typer CLI with run inspection, approval,
   rejection, resumption, and deletion commands; Ctrl-C must leave a resumable
   paused run.
-- [ ] **Check 12.9**: Define the trigger port used by the CLI and document how a
+- [x] **Check 12.9**: Define the trigger port used by the CLI and document how a
   future HTTP, webhook, or batch adapter invokes the same run service without
   duplicating Agent flow.
-- [ ] **Check 12.10**: Update user-facing documentation; cover persistence,
+- [x] **Check 12.10**: Update user-facing documentation; cover persistence,
   state transitions, resume idempotency, approvals, compaction, tool contracts,
   and redaction with mocked unit tests; run the quality gate.
 

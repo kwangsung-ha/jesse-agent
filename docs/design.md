@@ -182,8 +182,8 @@ graph TD
 
 - 실행 상태는 `running`, `pending_approval`, `paused`, `completed`, `failed`,
   `cancelled` 중 하나이며, reducer는 `user_request`, `model_decision`, `tool_call`,
-  `tool_result`, `approval_requested`, `approval_resolved`, `final_response`,
-  `failure` 이벤트로부터 상태를 계산한다.
+  `tool_result`, `approval_requested`, `approval_resolved`, `paused`,
+  `final_response`, `failure` 이벤트로부터 상태를 계산한다.
 - `launch`, `get_status`, `approve`, `reject`, `resume`, `list_runs`, `delete_run`
   은 `AgentRunService`가 제공하는 애플리케이션 API다. 재개는 완료된 tool call을
   다시 실행하지 않는다.
@@ -193,6 +193,10 @@ graph TD
   이벤트에 저장하지 않는다.
 - 모델 컨텍스트는 설정된 턴·크기 예산을 넘기면 결정론적으로 축약한다. 사용자 출력의
   인용과 근거는 축약하지 않는다.
+- `AgentRunTrigger` port가 이 lifecycle API를 선언한다. 현재 `tubetalk-runs`가 이를
+  호출하며, 미래 HTTP endpoint는 `launch(request)`, webhook은 검증된 payload를 request로
+  변환해 `launch`, batch는 저장된 `run_id`로 `resume`만 호출한다. 어느 adapter도 모델 loop,
+  이벤트 기록, 승인 상태 전이를 직접 구현하지 않는다.
 
 ## 8. 후속 설계 범위
 

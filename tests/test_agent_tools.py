@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from tubetalk.agent.contracts import ToolCall
-from tubetalk.agent.tools import VideoToolExecutor
+from tubetalk.agent.tools import ProcessVideoInput, VideoToolExecutor
 from tubetalk.services.video_service import VideoNotFoundError
 
 
@@ -20,12 +20,9 @@ def test_process_tool_calls_service_and_sets_current_video(mocker: Any) -> None:
     )
     tools = VideoToolExecutor(service)
 
-    result = tools.execute(
-        ToolCall(name="process_video", arguments={"url": "https://youtu.be/video1"})
-    )
+    result = tools._process_video(ProcessVideoInput(url="https://youtu.be/video1"))
 
-    assert result.ok is True
-    assert result.content["video_id"] == "video1"
+    assert result["video_id"] == "video1"
     assert tools.current_video_id == "video1"
     service.process.assert_called_once_with("https://youtu.be/video1")
 
@@ -47,6 +44,9 @@ def test_tool_validation_and_service_errors_are_returned_as_context(
     assert "Invalid tool arguments" in invalid.content["error"]
     assert missing.content["error"] == "missing"
     assert unknown.content["error"] == "Unknown tool 'made_up_tool'."
+    assert invalid.error_code == "invalid_arguments"
+    assert missing.error_code == "video_service_error"
+    assert unknown.next_action == "Choose one of the declared tools."
 
 
 def test_tool_declarations_expose_only_bounded_video_operations(mocker: Any) -> None:
@@ -60,6 +60,7 @@ def test_tool_declarations_expose_only_bounded_video_operations(mocker: Any) -> 
         "get_video_status",
         "get_summary",
         "answer_video_question",
+        "request_approval",
     }
 
 
@@ -107,7 +108,7 @@ def test_list_status_summary_and_question_tools_return_service_data(
         ToolCall(name="get_video_status", arguments={"video_id": "video1"})
     )
     summary = tools.execute(
-        ToolCall(name="get_summary", arguments={"video_id": "video1", "generate": True})
+        ToolCall(name="get_summary", arguments={"video_id": "video1"})
     )
     answer = tools.execute(
         ToolCall(
@@ -120,4 +121,17 @@ def test_list_status_summary_and_question_tools_return_service_data(
     assert detail.content["video"]["video_id"] == "video1"
     assert summary.content["chapters"] == [{"start_sec": 0}]
     assert answer.content["citations"][0]["evidence"] == "근거"
-    service.get_summary.assert_called_once_with("video1", generate=True)
+    service.get_summary.assert_called_once_with("video1", generate=False)
+
+
+def test_costly_tools_require_approval_before_service_execution(mocker: Any) -> None:
+    """Generation and processing cannot bypass the explicit approval policy."""
+    service = mocker.Mock()
+    tools = VideoToolExecutor(service)
+
+    result = tools.execute(
+        ToolCall(name="process_video", arguments={"url": "https://x"})
+    )
+
+    assert result.error_code == "approval_required"
+    service.process.assert_not_called()
