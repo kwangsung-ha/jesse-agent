@@ -15,7 +15,6 @@ venv = ".venv"
 
 [tool.poetry.scripts]
 jesseagent = "jesseagent.cli.main:app"
-jesseagent-runs = "jesseagent.cli.runs:app"
 
 [tool.poetry.dependencies]
 python = "3.12.*"

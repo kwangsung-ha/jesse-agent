@@ -73,6 +73,10 @@ sequenceDiagram
 
 ## 4. Agent 실행과 승인
 
+CLI root는 명령 도움말만 제공한다. `jesseagent run`은 REPL이며, 같은 명령군의
+`list/status/approve/reject/resume/delete`가 durable run lifecycle을 관리한다.
+`jesseagent sources sync obsidian`은 Agent 대화와 분리된 명시적 Source 동기화 명령이다.
+
 `AgentRunService`와 SQLite append-only event log는 계속 lifecycle source of truth다. 읽기
 작업(검색, 원문 조회, 상태 조회)은 즉시 실행한다. 유료 생성, 새 Source 수집, Sink 적용은
 `approval_requested` 이벤트를 기록하고 `pending_approval`에서 중지한다. 재개는 완료된
@@ -96,8 +100,8 @@ Sink는 그 작업이 의존하는 I/O adapter로만 조합한다.
   충돌하지 않는다.
 - `agent_runs.sqlite3`의 event schema는 유지한다. Sink 계획에는 API 키, 전체 원문,
   렌더링 프롬프트를 넣지 않는다.
-- Python 패키지와 CLI는 `jesseagent`, `jesseagent-runs`로 즉시 전환됐으며 `tubetalk`
-  호환 별칭은 제공하지 않는다.
+- Python 패키지와 CLI는 `jesseagent`로 통합됐으며, durable run 관리는
+  `jesseagent runs` 하위 명령으로 제공한다. `tubetalk` 호환 별칭은 제공하지 않는다.
 
 ## 6. 구현 순서
 

@@ -67,12 +67,12 @@ poetry run jesseagent --debug '캐시된 영상 목록을 보여줘'
 명령으로 조회·승인·재개·삭제할 수 있다.
 
 ```bash
-poetry run jesseagent-runs list
-poetry run jesseagent-runs status RUN_ID
-poetry run jesseagent-runs approve RUN_ID
-poetry run jesseagent-runs resume RUN_ID
-poetry run jesseagent-runs reject RUN_ID
-poetry run jesseagent-runs delete RUN_ID
+poetry run jesseagent run list
+poetry run jesseagent run status RUN_ID
+poetry run jesseagent run approve RUN_ID
+poetry run jesseagent run resume RUN_ID
+poetry run jesseagent run reject RUN_ID
+poetry run jesseagent run delete RUN_ID
 ```
 
 이벤트에는 API 키, 전체 렌더링 프롬프트, 자막 원문을 저장하지 않는다. 실행 이력은

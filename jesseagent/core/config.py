@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     data_dir: Path = Path("./data")
+    obsidian_vault_path: Path | None = None
     vision_model: str = "gemini-3.5-flash"
     vision_prompt_version: str = "vision-scenes-v2-30s"
     llm_model: str = "gemini-3.5-flash-lite"

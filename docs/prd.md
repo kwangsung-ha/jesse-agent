@@ -7,6 +7,10 @@ YouTube와 Obsidian 같은 **Source connector**에서 정보를 수집·색인�
 답변을 제공하며, 장차 **Sink connector**를 통해 승인된 작업 결과를 외부 시스템에
 반영한다.
 
+CLI는 `jesseagent run`으로 멀티턴 REPL을 시작한다. durable run의 조회·승인·거절·재개·삭제는
+`jesseagent run <관리 명령>`으로 수행하며, 단발 자연어 요청 명령은 제공하지 않는다. Source
+동기화는 별도 명령군인 `jesseagent sources sync obsidian`으로 명시적으로 실행한다.
+
 ### 핵심 가치
 
 - 개인 자료를 원본 위치에 유지하고, 필요한 근거만 검색해 Gemini에 전달한다.

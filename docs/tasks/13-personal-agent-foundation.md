@@ -9,8 +9,8 @@ JesseAgent를 YouTube 전용 도구에서 개인 지식과 작업을 위한 확�
 
 ## Decisions
 
-- 패키지와 CLI 이름은 `jesseagent`, `jesseagent-runs`로 즉시 전환하며 `tubetalk` 호환
-  별칭은 제공하지 않는다.
+- 패키지와 CLI 이름은 `jesseagent`로 즉시 전환하며, durable run 관리는 `jesseagent runs`로
+  통합한다. `tubetalk` 호환 별칭은 제공하지 않는다.
 - Obsidian은 `OBSIDIAN_VAULT_PATH`에서 명시적 sync 명령으로만 읽는다. 파일 watcher와
   실제 파일 쓰기는 후속 범위다.
 - Gemini 임베딩과 답변 모델을 계속 사용하되, 검색된 제한된 근거만 모델로 보낸다.
@@ -26,7 +26,7 @@ JesseAgent를 YouTube 전용 도구에서 개인 지식과 작업을 위한 확�
   갱신하고 구현 순서와 비범위를 검토한다.
 - [x] **Check 13.4**: Obsidian Markdown 파서와 heading 기반 chunker를 구현하고,
   frontmatter·태그·Wiki link·변경 감지 테스트를 작성한다.
-- [ ] **Check 13.5**: SQLite 카탈로그/FTS5와 Chroma 공통 인덱스를 구현하고,
+- [x] **Check 13.5**: SQLite 카탈로그/FTS5와 Chroma 공통 인덱스를 구현하고,
   `jesseagent sources sync obsidian` 증분 동기화를 제공한다.
 - [ ] **Check 13.6**: 벡터·키워드 RRF 검색, Obsidian URI 근거, 등록형 Agent 작업과
   조회 도구를 구현한다.

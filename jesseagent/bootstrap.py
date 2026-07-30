@@ -13,6 +13,7 @@ from jesseagent.domain.transcript_index import TranscriptChunkPolicy
 from jesseagent.infrastructure.agents.gemini import GeminiAgentModel
 from jesseagent.infrastructure.chats.gemini import GeminiChatProvider
 from jesseagent.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
+from jesseagent.infrastructure.repositories.chroma_knowledge import ChromaKnowledgeIndex
 from jesseagent.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
 )
@@ -21,6 +22,9 @@ from jesseagent.infrastructure.repositories.chroma_vision import (
 )
 from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
     SQLiteAgentRunRepository,
+)
+from jesseagent.infrastructure.repositories.sqlite_knowledge import (
+    SQLiteKnowledgeCatalog,
 )
 from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider
 from jesseagent.infrastructure.visions.gemini import GeminiVisionAnalyzer
@@ -32,7 +36,9 @@ from jesseagent.ports.transcript_index_repository import TranscriptIndexReposito
 from jesseagent.ports.vision import VisionAnalyzer
 from jesseagent.ports.vision_index_repository import VisionIndexRepository
 from jesseagent.services.agent_run_service import AgentRunService
+from jesseagent.services.knowledge_sync import KnowledgeSyncService
 from jesseagent.services.video_service import VideoService
+from jesseagent.sources.obsidian import chunk_markdown
 
 
 def create_video_service(config: Settings = settings) -> VideoService:
@@ -111,6 +117,20 @@ def create_agent_run_service(config: Settings = settings) -> AgentRunService:
         )
 
     return AgentRunService(repository, sessions)
+
+
+def create_knowledge_sync_service(config: Settings = settings) -> KnowledgeSyncService:
+    """Build the source-neutral incremental indexing service."""
+    return KnowledgeSyncService(
+        SQLiteKnowledgeCatalog(config.data_dir / "knowledge.sqlite3"),
+        ChromaKnowledgeIndex(
+            config.data_dir / "knowledge_chromadb",
+            config.embedding_model,
+            config.embedding_dimension,
+        ),
+        _embedding_provider_factory(config),
+        chunk_markdown,
+    )
 
 
 def _embedding_provider_factory(
