@@ -24,7 +24,7 @@ JesseAgent를 YouTube 전용 도구에서 개인 지식과 작업을 위한 확�
   기존 YouTube 데이터를 정식 Source로 투영하는 단위 테스트를 작성한다.
 - [x] **Check 13.3**: PRD와 설계 문서를 개인 Agent의 Source·검색·작업·Sink 경계로
   갱신하고 구현 순서와 비범위를 검토한다.
-- [ ] **Check 13.4**: Obsidian Markdown 파서와 heading 기반 chunker를 구현하고,
+- [x] **Check 13.4**: Obsidian Markdown 파서와 heading 기반 chunker를 구현하고,
   frontmatter·태그·Wiki link·변경 감지 테스트를 작성한다.
 - [ ] **Check 13.5**: SQLite 카탈로그/FTS5와 Chroma 공통 인덱스를 구현하고,
   `jesseagent sources sync obsidian` 증분 동기화를 제공한다.
