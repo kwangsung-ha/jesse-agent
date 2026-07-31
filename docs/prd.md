@@ -4,8 +4,8 @@
 
 JesseAgent는 Jesse의 개인 지식과 작업을 한 곳에서 다루는 로컬 우선 CLI Agent다.
 YouTube와 Obsidian 같은 **Source connector**에서 정보를 수집·색인하고, 근거가 있는
-답변을 제공하며, 장차 **Sink connector**를 통해 승인된 작업 결과를 외부 시스템에
-반영한다.
+답변을 제공한다. **Sink connector**는 계획·미리보기·명시 승인 계약과 durable lifecycle만
+구현되어 있으며, 실제 외부 시스템 반영 adapter는 아직 제공하지 않는다.
 
 CLI는 `jesseagent run`으로 멀티턴 REPL을 시작한다. durable run의 조회·승인·거절·재개·삭제는
 `jesseagent run <관리 명령>`으로 수행하며, 단발 자연어 요청 명령은 제공하지 않는다. Source
@@ -24,8 +24,9 @@ CLI는 `jesseagent run`으로 멀티턴 REPL을 시작한다. durable run의 조
 - YouTube 수집·자막/비전 색인·영상 Q&A는 계속 지원한다.
 - `KnowledgeDocument`, `KnowledgeChunk`, Source connector 계약과 YouTube transcript
   adapter가 구현됐다.
-
-Obsidian 색인, 공통 검색 저장소, 등록형 Agent 작업, 실제 Sink는 Task 13의 후속 항목이다.
+- Obsidian parser·heading chunker·명시적 증분 sync가 구현됐다.
+- SQLite FTS5·Chroma 공통 인덱스와 RRF 기반 `search_knowledge` Agent 도구가 구현됐다.
+- Sink plan의 preview·승인·거절·승인 후 단일 적용 상태 전이가 구현됐다. 실제 Sink는 없다.
 
 ## 2. 기능 요구사항
 
@@ -57,7 +58,7 @@ Obsidian 색인, 공통 검색 저장소, 등록형 Agent 작업, 실제 Sink는
 
 ### F-4. 확장 가능한 Agent 작업과 Sink
 
-- Agent 작업은 `TaskDefinition`으로 등록하는 확장 단위다. 작업은 이름·설명, Pydantic
+- 목표 Agent 작업은 `TaskDefinition`으로 등록하는 확장 단위다. 작업은 이름·설명, Pydantic
   입력/출력 계약, side-effect·승인 정책, 실행기, 사용하는 Source/Sink와 버전된 프롬프트를
   명시한다.
 - Agent는 자연어 요청을 등록된 작업의 검증 가능한 tool call로 변환할 뿐이다. 작업 실행기는
@@ -70,6 +71,10 @@ Obsidian 색인, 공통 검색 저장소, 등록형 Agent 작업, 실제 Sink는
   계획의 적용만 담당한다. 작업의 비즈니스 흐름과 프롬프트는 connector에 두지 않는다.
 - 첫 릴리스는 Sink 계약과 승인 흐름만 제공하며, Obsidian 쓰기·파일 이동·외부 서비스
   전송은 제공하지 않는다.
+
+현재 구현은 `VideoToolExecutor`의 tool registry가 Pydantic 입력 schema와 handler에서 Gemini
+tool declaration을 만든다. `search_knowledge`가 첫 공통 지식 조회 작업이며, 독립
+`TaskDefinition`/`TaskExecutor` 타입으로의 일반화는 후속 범위다.
 
 ## 3. 기술 및 운영 제약
 
@@ -105,7 +110,7 @@ data/
 
 - 수정되지 않은 Obsidian 문서는 재임베딩하지 않으며, 수정·삭제 사항은 다음 sync에서
   검색 결과에 반영된다.
-- 개인 지식 질문은 최소 한 개의 검증 가능한 출처와 함께 답한다.
+- 개인 지식 검색 결과는 가능한 경우 원문을 여는 Obsidian URI와 함께 제공한다.
 - 승인 없는 Sink 적용이나 외부 전송은 절대 실행하지 않는다.
 - 첫 릴리스에는 파일 watcher, Obsidian 쓰기, 웹/API UI, 다중 사용자/권한 관리, 로컬 LLM
   운영을 포함하지 않는다.
