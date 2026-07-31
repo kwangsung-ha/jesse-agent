@@ -20,6 +20,7 @@ def reduce_run(run: AgentRun, events: tuple[AgentRunEvent, ...]) -> AgentRunStat
     """Return the lifecycle snapshot derived only from ordered events."""
     status = AgentRunStatus.RUNNING
     current_video_id: str | None = None
+    approval_preview: str | None = None
     previous_sequence = 0
     for event in events:
         if event.run_id != run.run_id or event.sequence != previous_sequence + 1:
@@ -29,12 +30,15 @@ def reduce_run(run: AgentRun, events: tuple[AgentRunEvent, ...]) -> AgentRunStat
             status = AgentRunStatus.RUNNING
         elif event.event_type == AgentEventType.APPROVAL_REQUESTED:
             status = AgentRunStatus.PENDING_APPROVAL
+            preview = event.payload.get("preview")
+            approval_preview = preview if isinstance(preview, str) else None
         elif event.event_type == AgentEventType.APPROVAL_RESOLVED:
             status = (
                 AgentRunStatus.RUNNING
                 if event.payload.get("approved") is True
                 else AgentRunStatus.CANCELLED
             )
+            approval_preview = None
         elif event.event_type == AgentEventType.PAUSED:
             status = AgentRunStatus.PAUSED
         elif event.event_type == AgentEventType.FINAL_RESPONSE:
@@ -47,6 +51,7 @@ def reduce_run(run: AgentRun, events: tuple[AgentRunEvent, ...]) -> AgentRunStat
         status=status,
         last_sequence=previous_sequence,
         current_video_id=current_video_id,
+        approval_preview=approval_preview,
     )
 
 

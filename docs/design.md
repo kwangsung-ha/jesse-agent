@@ -39,6 +39,11 @@ sync 서비스가 connector, hash, 저장소, 재시도 정책을 조합하며 c
 connector는 원문 읽기나 외부 반영만 담당하며 작업의 프롬프트·비즈니스 흐름·승인 판단을
 소유하지 않는다.
 
+`SinkPlan`은 plan ID, Sink ID, 작업명, preview와 JSON-safe payload를 가진 불변 계약이다.
+승인 요청 이벤트는 이 계획과 preview를 함께 저장한다. 승인 후 `resume`은 이벤트에서 동일
+계획을 복원해 재계획 없이 한 번만 `apply()`하며, 거절되거나 이미 완료된 계획은 적용하지
+않는다. 현재는 이 계약과 상태 전이만 제공하고 production Sink connector는 등록하지 않는다.
+
 ### Source 구현 상태
 
 - `YouTubeSourceConnector`: 현재 로컬 캐시의 완전한 자막을 timestamp-preserving

@@ -49,6 +49,7 @@ class AgentRunState(BaseModel):
     status: AgentRunStatus = AgentRunStatus.RUNNING
     last_sequence: int = Field(default=0, ge=0)
     current_video_id: str | None = None
+    approval_preview: str | None = None
 
 
 class NewAgentRunEvent(BaseModel):

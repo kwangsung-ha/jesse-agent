@@ -8,6 +8,7 @@ from jesseagent.agent.runs import AgentEventType, AgentRun, NewAgentRunEvent
 from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
     SQLiteAgentRunRepository,
 )
+from jesseagent.ports.sink import SinkApplyResult, SinkPlan
 from jesseagent.services.agent_run_service import (
     AgentRunService,
     AgentRunTransitionError,
@@ -135,3 +136,72 @@ def test_resume_rejects_terminal_and_pending_runs(tmp_path: Path) -> None:
 
     with pytest.raises(AgentRunTransitionError, match="pending_approval"):
         service.resume("pending")
+
+
+def test_sink_plan_requires_preview_approval_and_applies_exactly_once(
+    tmp_path: Path,
+) -> None:
+    """A durable Sink plan cannot mutate before approval or be replayed."""
+    repository = SQLiteAgentRunRepository(tmp_path / "runs.sqlite3")
+    sessions = StubSessions(repository)
+    applied: list[SinkPlan] = []
+
+    def apply(plan: SinkPlan) -> SinkApplyResult:
+        applied.append(plan)
+        return SinkApplyResult(
+            plan_id=plan.plan_id, summary="장보기 목록을 반영했습니다."
+        )
+
+    service = AgentRunService(repository, sessions, apply)
+    repository.create_run(AgentRun(run_id="sink-run"))
+    repository.append_event(
+        NewAgentRunEvent(
+            run_id="sink-run",
+            event_type=AgentEventType.USER_REQUEST,
+            payload={"content": "장보기 목록을 저장해줘"},
+        )
+    )
+    plan = SinkPlan(
+        sink_id="fake",
+        operation="create_list",
+        preview="장보기 항목 3개를 생성합니다.",
+        payload={"items": ["양파", "감자", "카레"]},
+    )
+
+    pending = service.request_sink_plan("sink-run", plan)
+    assert pending.status == "pending_approval"
+    assert pending.approval_preview == "장보기 항목 3개를 생성합니다."
+    assert applied == []
+
+    service.approve("sink-run")
+    completed = service.resume("sink-run")
+    assert completed.state.status == "completed"
+    assert completed.response == "장보기 목록을 반영했습니다."
+    assert applied == [plan]
+    with pytest.raises(AgentRunTransitionError, match="completed"):
+        service.resume("sink-run")
+
+
+def test_rejected_sink_plan_never_applies(tmp_path: Path) -> None:
+    repository = SQLiteAgentRunRepository(tmp_path / "runs.sqlite3")
+    sessions = StubSessions(repository)
+    applied: list[SinkPlan] = []
+    service = AgentRunService(
+        repository,
+        sessions,
+        lambda plan: (
+            applied.append(plan)
+            or SinkApplyResult(plan_id=plan.plan_id, summary="applied")
+        ),
+    )
+    repository.create_run(AgentRun(run_id="rejected-sink"))
+    repository.append_event(
+        NewAgentRunEvent(run_id="rejected-sink", event_type=AgentEventType.USER_REQUEST)
+    )
+    service.request_sink_plan(
+        "rejected-sink",
+        SinkPlan(sink_id="fake", operation="write", preview="파일을 씁니다."),
+    )
+
+    assert service.reject("rejected-sink").status == "cancelled"
+    assert applied == []

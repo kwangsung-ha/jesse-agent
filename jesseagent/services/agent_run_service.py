@@ -1,5 +1,6 @@
 """Application API for durable Agent-run lifecycle operations."""
 
+from collections.abc import Callable
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
@@ -14,6 +15,7 @@ from jesseagent.agent.runs import (
     NewAgentRunEvent,
 )
 from jesseagent.ports.agent_run_repository import AgentRunRepository
+from jesseagent.ports.sink import SinkApplyResult, SinkPlan
 
 
 class AgentRunTransitionError(ValueError):
@@ -40,10 +42,14 @@ class AgentRunService:
     """Own lifecycle transitions above the Agent's deterministic event loop."""
 
     def __init__(
-        self, repository: AgentRunRepository, sessions: AgentSessionFactory
+        self,
+        repository: AgentRunRepository,
+        sessions: AgentSessionFactory,
+        sink_apply: Callable[[SinkPlan], SinkApplyResult] | None = None,
     ) -> None:
         self._repository = repository
         self._sessions = sessions
+        self._sink_apply = sink_apply
 
     def launch(self, request: str) -> AgentRunResult:
         """Create and execute one new run."""
@@ -84,6 +90,22 @@ class AgentRunService:
         )
         return self.get_status(run_id)
 
+    def request_sink_plan(self, run_id: str, plan: SinkPlan) -> AgentRunState:
+        """Persist a Sink preview and stop before any external mutation."""
+        self._require_status(run_id, AgentRunStatus.RUNNING)
+        self._repository.append_event(
+            NewAgentRunEvent(
+                run_id=run_id,
+                event_type=AgentEventType.APPROVAL_REQUESTED,
+                payload={
+                    "kind": "sink_plan",
+                    "preview": plan.preview,
+                    "plan": plan.model_dump(mode="json"),
+                },
+            )
+        )
+        return self.get_status(run_id)
+
     def resume(self, run_id: str) -> AgentRunResult:
         """Continue only a paused or approved run from its durable context."""
         state = self.get_status(run_id)
@@ -91,6 +113,31 @@ class AgentRunService:
             raise AgentRunTransitionError(
                 f"Cannot resume a run in '{state.status}' state"
             )
+        sink_plan = self._approved_sink_plan(run_id)
+        if sink_plan is not None:
+            if self._sink_apply is None:
+                raise AgentRunTransitionError("No Sink connector can apply this plan")
+            result = self._sink_apply(sink_plan)
+            self._repository.append_event(
+                NewAgentRunEvent(
+                    run_id=run_id,
+                    event_type=AgentEventType.TOOL_RESULT,
+                    payload={
+                        "name": "apply_sink_plan",
+                        "ok": True,
+                        "content": result.model_dump(mode="json"),
+                    },
+                )
+            )
+            response = result.summary
+            self._repository.append_event(
+                NewAgentRunEvent(
+                    run_id=run_id,
+                    event_type=AgentEventType.FINAL_RESPONSE,
+                    payload={"text": response},
+                )
+            )
+            return AgentRunResult(state=self.get_status(run_id), response=response)
         run = self._repository.get_run(run_id)
         response = self._sessions(run).resume()
         return AgentRunResult(state=self.get_status(run_id), response=response)
@@ -114,6 +161,20 @@ class AgentRunService:
                 payload={"approved": approved},
             )
         )
+
+    def _approved_sink_plan(self, run_id: str) -> SinkPlan | None:
+        events = self._repository.list_events(run_id)
+        if not events or events[-1].event_type != AgentEventType.APPROVAL_RESOLVED:
+            return None
+        if events[-1].payload.get("approved") is not True:
+            return None
+        for event in reversed(events[:-1]):
+            if event.event_type == AgentEventType.APPROVAL_REQUESTED:
+                if event.payload.get("kind") != "sink_plan":
+                    return None
+                plan = event.payload.get("plan")
+                return SinkPlan.model_validate(plan) if isinstance(plan, dict) else None
+        return None
 
 
 def _require_run_id(session: AgentSession) -> str:

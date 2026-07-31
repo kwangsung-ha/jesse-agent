@@ -30,7 +30,7 @@ JesseAgent를 YouTube 전용 도구에서 개인 지식과 작업을 위한 확�
   `jesseagent sources sync obsidian` 증분 동기화를 제공한다.
 - [x] **Check 13.6**: 벡터·키워드 RRF 검색, Obsidian URI 근거, 등록형 Agent 작업과
   조회 도구를 구현한다.
-- [ ] **Check 13.7**: Sink connector의 계획·미리보기·명시 승인 계약을 durable run
+- [x] **Check 13.7**: Sink connector의 계획·미리보기·명시 승인 계약을 durable run
   lifecycle에 연결하고 실제 Sink 없이 상태 전이 테스트를 작성한다.
 
 ## Completion Rules
