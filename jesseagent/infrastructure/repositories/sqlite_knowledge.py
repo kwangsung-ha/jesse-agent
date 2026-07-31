@@ -91,3 +91,23 @@ class SQLiteKnowledgeCatalog:
                     "DELETE FROM documents WHERE source_id = ? AND document_id = ?",
                     (source_id, document_id),
                 )
+
+    def search(self, query: str, limit: int) -> list[dict[str, object]]:
+        """Return FTS5-ranked chunks with the evidence data needed by the Agent."""
+        rows = self._connection.execute(
+            """SELECT c.chunk_id, c.text, d.title, d.uri, c.metadata
+               FROM chunk_fts f JOIN chunks c ON c.chunk_id = f.chunk_id
+               JOIN documents d ON d.document_id = c.document_id
+               WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts) LIMIT ?""",
+            (query, limit),
+        )
+        return [
+            {
+                "chunk_id": row[0],
+                "text": row[1],
+                "title": row[2],
+                "uri": row[3],
+                "metadata": json.loads(row[4]),
+            }
+            for row in rows
+        ]

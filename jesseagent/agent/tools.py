@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from jesseagent.agent.contracts import ToolCall, ToolResult
 from jesseagent.domain.video_status import VideoStatus
+from jesseagent.services.knowledge_search import KnowledgeSearchService
 from jesseagent.services.video_service import (
     ChatSession,
     VideoService,
@@ -41,14 +42,23 @@ class ApprovalRequestInput(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class KnowledgeSearchInput(BaseModel):
+    query: str = Field(min_length=1)
+
+
 ToolHandler = Callable[[BaseModel], dict[str, Any]]
 
 
 class VideoToolExecutor:
     """Validate and execute the Agent's bounded service operations."""
 
-    def __init__(self, service: VideoService) -> None:
+    def __init__(
+        self,
+        service: VideoService,
+        knowledge_search: KnowledgeSearchService | None = None,
+    ) -> None:
         self._service = service
+        self._knowledge_search = knowledge_search
         self._sessions: dict[str, ChatSession] = {}
         self.current_video_id: str | None = None
         self._tools: dict[str, tuple[type[BaseModel], ToolHandler]] = {
@@ -58,6 +68,7 @@ class VideoToolExecutor:
             "get_summary": (SummaryInput, self._get_summary),
             "answer_video_question": (VideoQuestionInput, self._answer_question),
             "request_approval": (ApprovalRequestInput, self._request_approval),
+            "search_knowledge": (KnowledgeSearchInput, self._search_knowledge),
         }
 
     @property
@@ -176,6 +187,12 @@ class VideoToolExecutor:
             raise VideoServiceError("This operation does not require approval")
         return {"tool_name": request.tool_name, "arguments": request.arguments}
 
+    def _search_knowledge(self, payload: BaseModel) -> dict[str, Any]:
+        if self._knowledge_search is None:
+            raise VideoServiceError("Knowledge search is not configured")
+        query = KnowledgeSearchInput.model_validate(payload).query
+        return {"results": self._knowledge_search.search(query)}
+
     @staticmethod
     def _requires_approval(call: ToolCall) -> bool:
         if call.name == "process_video":
@@ -197,6 +214,9 @@ _TOOL_DESCRIPTIONS = {
     ),
     "request_approval": (
         "Request explicit approval before a costly or mutating operation."
+    ),
+    "search_knowledge": (
+        "Search indexed personal knowledge and return URI-backed evidence."
     ),
 }
 

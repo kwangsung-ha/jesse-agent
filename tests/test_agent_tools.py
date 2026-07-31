@@ -49,7 +49,9 @@ def test_tool_validation_and_service_errors_are_returned_as_context(
     assert unknown.next_action == "Choose one of the declared tools."
 
 
-def test_tool_declarations_expose_only_bounded_video_operations(mocker: Any) -> None:
+def test_tool_declarations_expose_bounded_video_and_knowledge_operations(
+    mocker: Any,
+) -> None:
     tools = VideoToolExecutor(mocker.Mock())
 
     names = {item["name"] for item in tools.declarations}
@@ -61,6 +63,7 @@ def test_tool_declarations_expose_only_bounded_video_operations(mocker: Any) -> 
         "get_summary",
         "answer_video_question",
         "request_approval",
+        "search_knowledge",
     }
 
 

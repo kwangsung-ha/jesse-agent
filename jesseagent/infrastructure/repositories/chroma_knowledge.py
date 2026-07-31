@@ -49,3 +49,18 @@ class ChromaKnowledgeIndex:
     def delete_documents(self, document_ids: set[str]) -> None:
         for document_id in document_ids:
             self._collection.delete(where={"document_id": document_id})
+
+    def search(self, embedding: list[float], limit: int) -> list[dict[str, object]]:
+        if len(embedding) != self._dimension:
+            raise ValueError("Query embedding has an unexpected dimension")
+        result = self._collection.query(
+            query_embeddings=[embedding],  # type: ignore[arg-type]
+            n_results=limit,
+        )
+        ids = result["ids"][0] if result["ids"] else []
+        documents = result["documents"][0] if result["documents"] else []
+        distances = result["distances"][0] if result["distances"] else []
+        return [
+            {"chunk_id": str(chunk_id), "text": str(text), "distance": float(distance)}
+            for chunk_id, text, distance in zip(ids, documents, distances, strict=True)
+        ]

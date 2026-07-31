@@ -36,6 +36,7 @@ from jesseagent.ports.transcript_index_repository import TranscriptIndexReposito
 from jesseagent.ports.vision import VisionAnalyzer
 from jesseagent.ports.vision_index_repository import VisionIndexRepository
 from jesseagent.services.agent_run_service import AgentRunService
+from jesseagent.services.knowledge_search import KnowledgeSearchService
 from jesseagent.services.knowledge_sync import KnowledgeSyncService
 from jesseagent.services.video_service import VideoService
 from jesseagent.sources.obsidian import chunk_markdown
@@ -86,7 +87,9 @@ def create_agent_session(
             model=config.llm_model,
             prompt_version=config.agent_prompt_version,
         ),
-        tools=VideoToolExecutor(create_video_service(config)),
+        tools=VideoToolExecutor(
+            create_video_service(config), create_knowledge_search_service(config)
+        ),
         max_steps=config.agent_max_steps,
         on_tool_result=on_tool_result,
         repository=SQLiteAgentRunRepository(config.data_dir / "agent_runs.sqlite3"),
@@ -106,7 +109,9 @@ def create_agent_run_service(config: Settings = settings) -> AgentRunService:
             model=GeminiAgentModel(
                 config.gemini_api_key, config.llm_model, config.agent_prompt_version
             ),
-            tools=VideoToolExecutor(create_video_service(config)),
+            tools=VideoToolExecutor(
+                create_video_service(config), create_knowledge_search_service(config)
+            ),
             max_steps=config.agent_max_steps,
             repository=repository,
             existing_run=run,
@@ -130,6 +135,20 @@ def create_knowledge_sync_service(config: Settings = settings) -> KnowledgeSyncS
         ),
         _embedding_provider_factory(config),
         chunk_markdown,
+    )
+
+
+def create_knowledge_search_service(
+    config: Settings = settings,
+) -> KnowledgeSearchService:
+    return KnowledgeSearchService(
+        SQLiteKnowledgeCatalog(config.data_dir / "knowledge.sqlite3"),
+        ChromaKnowledgeIndex(
+            config.data_dir / "knowledge_chromadb",
+            config.embedding_model,
+            config.embedding_dimension,
+        ),
+        _embedding_provider_factory(config)(),
     )
 
 
