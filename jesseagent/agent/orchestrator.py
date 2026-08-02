@@ -1,13 +1,13 @@
 """Deterministic, event-backed control flow around Agent tool decisions."""
 
 from collections.abc import Callable
-from typing import Protocol
 from uuid import uuid4
 
 from pydantic import JsonValue
 
 from jesseagent.agent.context import AgentContextBudget, compact_messages
-from jesseagent.agent.contracts import AgentDecision, AgentMessage
+from jesseagent.agent.contracts import AgentMessage
+from jesseagent.agent.model import AgentModel, AgentModelError
 from jesseagent.agent.reducer import model_messages, reduce_run
 from jesseagent.agent.runs import (
     AgentEventType,
@@ -19,22 +19,6 @@ from jesseagent.application.agent_runs.contracts import AgentRunRepository
 from jesseagent.core.logging import logger
 from jesseagent.tools.contracts import ToolResult
 from jesseagent.tools.executor import ToolExecutor
-
-
-class AgentModelError(Exception):
-    """Raised when the model cannot produce a usable Agent decision."""
-
-
-class AgentModel(Protocol):
-    """Choose the next native tool call or return a final natural-language reply."""
-
-    def decide(
-        self,
-        messages: tuple[AgentMessage, ...],
-        declarations: tuple[dict[str, object], ...],
-        current_video_id: str | None,
-    ) -> AgentDecision:
-        """Return one model decision for the supplied compact conversation."""
 
 
 class AgentSession:

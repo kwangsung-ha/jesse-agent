@@ -8,8 +8,8 @@ from google.genai.errors import APIError
 from httpx import HTTPError
 
 from jesseagent.agent.contracts import AgentDecision, AgentMessage
-from jesseagent.agent.orchestrator import AgentModelError
-from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
+from jesseagent.agent.model import AgentModelError
+from jesseagent.core.prompt_loader import PromptCatalog, PromptTemplateError
 from jesseagent.tools.contracts import ToolCall
 
 

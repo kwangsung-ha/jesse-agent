@@ -8,7 +8,7 @@ from loguru import logger
 from jesseagent.application.video.contracts import SummaryProviderError
 from jesseagent.core import logging as logging_config
 from jesseagent.core.logging import configure_debug_logging
-from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
+from jesseagent.core.prompt_loader import PromptCatalog, PromptTemplateError
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
 from jesseagent.infrastructure.gemini.summary import GeminiSummaryProvider
 

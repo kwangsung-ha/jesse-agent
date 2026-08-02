@@ -13,12 +13,12 @@
   - Pydantic Settings 기반 설정 및 로컬 데이터 경로 구조화 (`./data/`)
 
 ## Phase 1: 로컬 영속성 & 텍스트 자막 Ingestion 파이프라인
-- [x] **Task 01: 자막 파싱 & 캐시 수집기 및 CLI status 커맨드 (`pipeline/loader.py`, `cli/`)** `docs/tasks/01-loader-pipeline.md`
+- [x] **Task 01: 자막 파싱 & 캐시 수집기 및 CLI status 커맨드 (`infrastructure/youtube/loader.py`, `cli/`)** `docs/tasks/01-loader-pipeline.md`
   - `youtube-transcript-api` 자막 추출기 및 `yt-dlp` 메타데이터 수집
-  - JSON 캐시 관리자 (`core/cache.py`) 연동 및 로컬 캐싱 검증 (2초 이내 로딩)
+  - JSON 캐시 관리자 (`infrastructure/local/video_cache.py`) 연동 및 로컬 캐싱 검증 (2초 이내 로딩)
   - `jesseagent status [video_id]` CLI 커맨드로 로컬 캐시 현황 조회 기능 구현
 
-- [x] **Task 02: ChromaDB 텍스트 자막 Vector Store 구축 (`infrastructure/repositories/chroma_transcript.py`)** `docs/tasks/02-vector-store.md`
+- [x] **Task 02: ChromaDB 텍스트 자막 Vector Store 구축 (`infrastructure/chroma/transcript.py`)** `docs/tasks/02-vector-store.md`
   - ChromaDB Local Client 연동 및 `transcript_collection` 스키마 정의
   - 타임스탬프 메타데이터 포함 자막 청크 임베딩 저작
 
@@ -26,11 +26,11 @@
   - Gemini Flash-Lite 기반 구조화된 요약·목차 생성 및 자막 근거 타임스탬프 검증
 
 ## Phase 2: Vision Scene Indexing 파이프라인
-- [x] **Task 04: Gemini 직접 비디오 씬 분석 기반 (`infrastructure/visions/`)** `docs/tasks/04-gemini-video-analysis.md`
+- [x] **Task 04: Gemini 직접 비디오 씬 분석 기반 (`infrastructure/gemini/vision.py`)** `docs/tasks/04-gemini-video-analysis.md`
   - 공개 YouTube URL 직접 분석 및 timestamped scene description 캐시
   - 로컬 프레임/모델 provider로 확장 가능한 vision interface
 
-- [x] **Task 05: Gemini Vision Scene Vector Index (`infrastructure/repositories/`)** `docs/tasks/05-vision-vector-index.md`
+- [x] **Task 05: Gemini Vision Scene Vector Index (`infrastructure/chroma/vision.py`)** `docs/tasks/05-vision-vector-index.md`
   - `vision_index.json` 설명 텍스트의 Gemini Embedding 2 저작
   - ChromaDB `vision_collection` Vector 인덱싱
 
@@ -67,9 +67,9 @@
   - 컨텍스트 예산, 타입화된 도구 계약, 승인 흐름, CLI run 관리
 
 ## Phase 7: Personal Knowledge Agent Foundation
-- [i] **Task 13: JesseAgent 개명 및 확장 가능한 개인 Agent 기반** `docs/tasks/13-personal-agent-foundation.md`
+- [x] **Task 13: JesseAgent 개명 및 확장 가능한 개인 Agent 기반** `docs/tasks/13-personal-agent-foundation.md`
   - [x] JesseAgent 패키지·CLI·문서 정식 개명 (기존 이름 호환 없음)
   - [x] 공통 KnowledgeDocument/KnowledgeChunk와 Source connector 계약
-  - [ ] Obsidian 증분 색인과 SQLite FTS5·Chroma 공통 검색 저장소
-  - [ ] 등록형 Agent 작업과 Source 검색 도구
-  - [ ] Sink connector 계약과 승인 미리보기 흐름
+  - [x] Obsidian 증분 색인과 SQLite FTS5·Chroma 공통 검색 저장소
+  - [x] 검증형 Agent tool registry와 Source 검색 도구
+  - [x] Sink connector 계약과 승인 미리보기 흐름

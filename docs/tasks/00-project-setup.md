@@ -16,9 +16,15 @@ jesseagent/
 ├── core/
 │   ├── __init__.py
 │   └── config.py          # Settings 클래스 (Pydantic Settings)
-├── pipeline/
+├── application/
 │   └── __init__.py
-├── storage/
+├── infrastructure/
+│   └── __init__.py
+├── sources/
+│   └── __init__.py
+├── sinks/
+│   └── __init__.py
+├── tools/
 │   └── __init__.py
 └── agent/
     └── __init__.py

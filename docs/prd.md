@@ -72,7 +72,7 @@ CLI는 `jesseagent run`으로 멀티턴 REPL을 시작한다. durable run의 조
 - 첫 릴리스는 Sink 계약과 승인 흐름만 제공하며, Obsidian 쓰기·파일 이동·외부 서비스
   전송은 제공하지 않는다.
 
-현재 구현은 `VideoToolExecutor`의 tool registry가 Pydantic 입력 schema와 handler에서 Gemini
+현재 구현은 중앙 `ToolExecutor`가 video·knowledge handler의 Pydantic 입력 schema에서 Gemini
 tool declaration을 만든다. `search_knowledge`가 첫 공통 지식 조회 작업이며, 독립
 `TaskDefinition`/`TaskExecutor` 타입으로의 일반화는 후속 범위다.
 

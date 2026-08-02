@@ -14,5 +14,5 @@ infrastructure adapter의 패키지 소유권을 명확하게 정리한다. 각 
   `infrastructure` packages and remove the obsolete `pipeline` package.
 - [x] **Check A.4**: Split Agent tool handlers from the central executor while
   preserving tool names, schemas, approval behavior, and result payloads.
-- [ ] **Check A.5**: Reorganize prompts by Agent and video application use case,
+- [x] **Check A.5**: Reorganize prompts by Agent and video application use case,
   then update architecture documentation and remove obsolete packages.

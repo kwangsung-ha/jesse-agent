@@ -121,8 +121,10 @@ poetry run jesseagent --help
 | `AGENT_CONTEXT_MAX_CHARACTERS` | `12000` | 모델에 전달할 최대 최근 문맥 문자 수 |
 
 전체 설정값은 [`jesseagent/core/config.py`](jesseagent/core/config.py)에서 확인할 수 있습니다.
-프롬프트는 `jesseagent/prompts/`의 버전 파일로 관리합니다. 템플릿을 변경할 때는 새 버전을
-추가하고 해당 환경 변수를 바꾸세요. 디버그 로그에는 자막·질문·근거가 포함될 수 있습니다.
+프롬프트는 `jesseagent/prompts/agent/`와
+`jesseagent/prompts/video/{summary,chat,vision}/`의 버전 파일로 관리합니다. 템플릿을
+변경할 때는 새 버전을 추가하고 해당 환경 변수를 바꾸세요. 디버그 로그에는
+자막·질문·근거가 포함될 수 있습니다.
 
 ## 로컬 데이터 구조
 

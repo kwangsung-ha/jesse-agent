@@ -13,13 +13,13 @@ class PromptCatalog:
     """Render package templates selected by a function-specific version."""
 
     _KIND_DIRECTORIES = {
-        "summary": "summary",
-        "summary_correction": "summary",
-        "chapter_candidates": "summary",
-        "chapter_candidates_correction": "summary",
-        "vision": "vision",
-        "chat": "chat",
-        "chat_correction": "chat",
+        "summary": "video/summary",
+        "summary_correction": "video/summary",
+        "chapter_candidates": "video/summary",
+        "chapter_candidates_correction": "video/summary",
+        "vision": "video/vision",
+        "chat": "video/chat",
+        "chat_correction": "video/chat",
         "agent": "agent",
     }
 

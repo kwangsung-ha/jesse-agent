@@ -10,7 +10,7 @@ from httpx import HTTPError
 
 from jesseagent.application.video.contracts import SummaryProviderError
 from jesseagent.core.logging import logger
-from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
+from jesseagent.core.prompt_loader import PromptCatalog, PromptTemplateError
 from jesseagent.domain.chaptering import (
     ChapterBlockPolicy,
     ChapterCandidate,

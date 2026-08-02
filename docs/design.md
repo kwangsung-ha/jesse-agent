@@ -8,18 +8,17 @@ JesseAgent는 Source·검색·Agent 도구·Sink를 분리한다. YouTube와 Obs
 ```mermaid
 graph TD
     User[User] --> CLI[Typer CLI]
+    CLI --> Applications[Application Workflows]
     CLI --> RunService[AgentRunService]
     RunService --> Agent[AgentSession]
-    Agent --> Tasks[Validated Tool Registry]
-    Tasks --> Sources[Source Connectors]
-    Sources --> Sync[Knowledge Sync Service]
-    Sync --> Catalog[SQLite Catalog + FTS5]
-    Sync --> Vectors[Chroma Knowledge Index]
-    Tasks --> Retrieve[Hybrid Retriever]
-    Retrieve --> Catalog
-    Retrieve --> Vectors
-    Tasks --> Sinks[Sink Connectors]
-    Sinks --> Approval[Preview + explicit approval]
+    Agent --> Tools[ToolExecutor]
+    Tools --> Applications
+    Applications --> SourceContracts[Source Contracts]
+    Applications --> ProviderContracts[Provider and Repository Contracts]
+    Applications --> SinkContracts[Sink Contracts]
+    Infrastructure[Gemini / Chroma / SQLite / Sources] --> ProviderContracts
+    Infrastructure --> SourceContracts
+    Infrastructure --> SinkContracts
 ```
 
 ## 2. 경계와 계약
@@ -33,6 +32,14 @@ title, content, SHA-256, 변경 시각, JSON-safe metadata를 가진다. `Knowle
 `SourceConnector`는 `source_id`와 안정적으로 정렬된 `list_documents()`를 제공한다.
 sync 서비스가 connector, hash, 저장소, 재시도 정책을 조합하며 connector는 임베딩·DB·Agent
 상태를 직접 다루지 않는다.
+
+`application`은 CLI와 Agent Tool이 함께 호출하는 use case를 소유한다. 영상 처리 workflow는
+Source에서 원본을 받아 자막 색인, 요약, 비전 분석과 색인을 조정하지만 Gemini·Chroma·로컬
+filesystem 구현을 직접 알지 않는다. `tools`는 Pydantic 입력 검증과 application 호출,
+`ToolResult` 변환만 담당하는 Agent용 inbound adapter다.
+
+`infrastructure`는 외부 기술 기준으로 `gemini`, `chroma`, `sqlite`, `youtube`, `obsidian`,
+`local`에 나뉜다. application 계약의 concrete 구현은 bootstrap에서만 조립한다.
 
 `SinkConnector`는 `plan()`과 `apply(approved_plan)` 계약을 갖는다. `plan()`은
 사용자 미리보기에 충분한 변경 요약을 반환하고 `apply()`는 durable run의 승인 후에만 호출된다.
@@ -99,9 +106,9 @@ Gemini tool declaration은 Task Registry에서 파생하며, 모델은 등록된
 Agent loop를 수정하지 않고 작업 등록·prompt 파일·bootstrap wiring으로 추가하며, Source와
 Sink는 그 작업이 의존하는 I/O adapter로만 조합한다.
 
-현재 구현은 `VideoToolExecutor` 내부 registry가 tool 이름을 Pydantic 입력 schema와 handler에
-매핑하고 declaration을 파생한다. `search_knowledge`도 이 registry에 등록된다. 독립
-`TaskDefinition`과 connector별 task package는 아직 일반화되지 않았다.
+현재 구현은 중앙 `ToolExecutor`가 tool 이름을 Pydantic 입력 schema와 video/knowledge
+handler에 매핑하고 declaration을 파생한다. handler는 application service만 호출한다. 독립
+`TaskDefinition`과 동적 task package 등록은 아직 일반화되지 않았다.
 
 ## 5. 저장소와 호환성
 
