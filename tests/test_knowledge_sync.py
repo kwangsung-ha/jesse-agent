@@ -3,11 +3,11 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+from jesseagent.application.knowledge.sync import KnowledgeSyncService
 from jesseagent.domain.knowledge import KnowledgeChunk, KnowledgeDocument
 from jesseagent.infrastructure.repositories.sqlite_knowledge import (
     SQLiteKnowledgeCatalog,
 )
-from jesseagent.services.knowledge_sync import KnowledgeSyncService
 
 
 class Source:

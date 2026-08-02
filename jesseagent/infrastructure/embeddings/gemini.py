@@ -7,7 +7,7 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from jesseagent.ports.embedding import EmbeddingProviderError
+from jesseagent.application.embedding import EmbeddingProviderError
 
 
 class GeminiEmbeddingProvider:

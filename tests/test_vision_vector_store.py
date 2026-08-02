@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
+from jesseagent.application.video.contracts import VisionIndexRepositoryError
 from jesseagent.domain.vision import VisionScene
 from jesseagent.infrastructure.repositories.chroma_vision import (
     ChromaVisionIndexRepository,
     format_scene_document,
 )
-from jesseagent.ports.vision_index_repository import VisionIndexRepositoryError
 
 
 class FakeEmbeddingProvider:

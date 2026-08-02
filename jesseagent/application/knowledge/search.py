@@ -1,20 +1,15 @@
 """Hybrid vector and FTS5 search over common knowledge chunks."""
 
 from collections.abc import Iterable
-from typing import Protocol
 
-from jesseagent.ports.embedding import EmbeddingProvider
+from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.knowledge.contracts import (
+    KnowledgeCatalogSearch,
+    KnowledgeVectorSearch,
+)
 
 RRF_K = 60
 SEARCH_LIMIT = 5
-
-
-class KnowledgeCatalogSearch(Protocol):
-    def search(self, query: str, limit: int) -> list[dict[str, object]]: ...
-
-
-class KnowledgeVectorSearch(Protocol):
-    def search(self, embedding: list[float], limit: int) -> list[dict[str, object]]: ...
 
 
 class KnowledgeSearchService:

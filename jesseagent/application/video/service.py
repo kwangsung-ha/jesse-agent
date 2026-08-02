@@ -4,6 +4,28 @@ from time import perf_counter
 from typing import Callable, Optional
 
 from jesseagent.agent.retriever import HybridRetrievalError, HybridRetriever
+from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.video.contracts import (
+    ChatProvider,
+    ChatProviderError,
+    SummaryProvider,
+    TranscriptIndexRepository,
+    TranscriptIndexRepositoryError,
+    TranscriptIndexStatus,
+    VisionAnalyzer,
+    VisionIndexRepository,
+)
+from jesseagent.application.video.results import (
+    ProcessResult,
+    ProcessTiming,
+    SummaryResult,
+)
+from jesseagent.application.video.stages import (
+    SummaryGenerationStage,
+    TranscriptIndexingStage,
+    VideoIngestionStage,
+    VisionIndexingStage,
+)
 from jesseagent.core.cache import LocalCacheManager
 from jesseagent.core.logging import logger
 from jesseagent.domain.chaptering import ChapterBlockPolicy, ChapterWindowPolicy
@@ -19,29 +41,6 @@ from jesseagent.pipeline.loader import (
 from jesseagent.pipeline.loader import (
     VideoLoaderError,
     YouTubeLoader,
-)
-from jesseagent.ports.chat import ChatProvider, ChatProviderError
-from jesseagent.ports.embedding import EmbeddingProvider
-from jesseagent.ports.summary import SummaryProvider
-from jesseagent.ports.transcript_index_repository import (
-    TranscriptIndexRepository,
-    TranscriptIndexRepositoryError,
-    TranscriptIndexStatus,
-)
-from jesseagent.ports.vision import VisionAnalyzer
-from jesseagent.ports.vision_index_repository import (
-    VisionIndexRepository,
-)
-from jesseagent.services.results import (
-    ProcessResult,
-    ProcessTiming,
-    SummaryResult,
-)
-from jesseagent.services.stages import (
-    SummaryGenerationStage,
-    TranscriptIndexingStage,
-    VideoIngestionStage,
-    VisionIndexingStage,
 )
 
 

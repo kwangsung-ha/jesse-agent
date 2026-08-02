@@ -16,8 +16,8 @@ from jesseagent.agent.runs import (
     NewAgentRunEvent,
 )
 from jesseagent.agent.tools import VideoToolExecutor
+from jesseagent.application.agent_runs.contracts import AgentRunRepository
 from jesseagent.core.logging import logger
-from jesseagent.ports.agent_run_repository import AgentRunRepository
 
 
 class AgentModelError(Exception):

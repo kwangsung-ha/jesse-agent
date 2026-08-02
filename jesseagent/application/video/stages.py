@@ -5,6 +5,23 @@ from typing import Callable
 
 from pydantic import BaseModel, ConfigDict
 
+from jesseagent.application.embedding import EmbeddingProvider, EmbeddingProviderError
+from jesseagent.application.video.contracts import (
+    SummaryProvider,
+    SummaryProviderError,
+    TranscriptIndexRepository,
+    TranscriptIndexRepositoryError,
+    VisionAnalyzer,
+    VisionIndexRepository,
+    VisionIndexRepositoryError,
+    VisionProviderError,
+    VisionVectorIndexStatus,
+)
+from jesseagent.application.video.results import (
+    IndexingResult,
+    SummaryResult,
+    VisionResult,
+)
 from jesseagent.core.cache import LocalCacheManager
 from jesseagent.domain.state import CacheState, SyncState
 from jesseagent.domain.summary import (
@@ -23,19 +40,6 @@ from jesseagent.domain.vision import (
     YouTubeUrlVisionSource,
 )
 from jesseagent.pipeline.loader import YouTubeLoader
-from jesseagent.ports.embedding import EmbeddingProvider, EmbeddingProviderError
-from jesseagent.ports.summary import SummaryProvider, SummaryProviderError
-from jesseagent.ports.transcript_index_repository import (
-    TranscriptIndexRepository,
-    TranscriptIndexRepositoryError,
-)
-from jesseagent.ports.vision import VisionAnalyzer, VisionProviderError
-from jesseagent.ports.vision_index_repository import (
-    VisionIndexRepository,
-    VisionIndexRepositoryError,
-    VisionVectorIndexStatus,
-)
-from jesseagent.services.results import IndexingResult, SummaryResult, VisionResult
 
 
 class IngestionResult(BaseModel):

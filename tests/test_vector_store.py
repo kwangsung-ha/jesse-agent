@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from jesseagent.application.video.contracts import TranscriptIndexRepositoryError
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
 from jesseagent.domain.transcript_index import (
     CHUNK_POLICY_VERSION,
@@ -18,7 +19,6 @@ from jesseagent.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
 from jesseagent.infrastructure.repositories.chroma_transcript import (
     ChromaTranscriptIndexRepository,
 )
-from jesseagent.ports.transcript_index_repository import TranscriptIndexRepositoryError
 
 
 class FakeEmbeddingProvider:

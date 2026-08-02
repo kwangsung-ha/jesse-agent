@@ -5,11 +5,11 @@ from unittest.mock import Mock
 
 import pytest
 
+from jesseagent.application.video.contracts import VisionProviderError
 from jesseagent.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
 from jesseagent.infrastructure.visions.gemini import (
     GeminiVisionAnalyzer,
 )
-from jesseagent.ports.vision import VisionProviderError
 
 
 def test_describe_sends_public_video_and_returns_ordered_scenes() -> None:

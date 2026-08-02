@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import chromadb
 
-from jesseagent.ports.embedding import EmbeddingProvider
+from jesseagent.application.embedding import EmbeddingProvider
 
 
 class ChromaVectorRepositoryBase:

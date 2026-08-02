@@ -8,10 +8,10 @@ from google import genai
 from google.genai.errors import APIError
 from httpx import HTTPError
 
+from jesseagent.application.video.contracts import VisionProviderError
 from jesseagent.core.logging import logger
 from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
 from jesseagent.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
-from jesseagent.ports.vision import VisionProviderError
 
 
 class GeminiVisionAnalyzer:

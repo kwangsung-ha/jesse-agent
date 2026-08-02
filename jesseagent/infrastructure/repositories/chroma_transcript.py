@@ -7,6 +7,11 @@ from typing import Optional
 
 from chromadb.errors import ChromaError
 
+from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.video.contracts import (
+    TranscriptIndexRepositoryError,
+    TranscriptIndexStatus,
+)
 from jesseagent.core.logging import logger
 from jesseagent.domain.retrieval import RetrievalHit
 from jesseagent.domain.state import CacheState
@@ -23,11 +28,6 @@ from jesseagent.domain.transcript_index import (
 )
 from jesseagent.infrastructure.repositories.chroma_base import (
     ChromaVectorRepositoryBase,
-)
-from jesseagent.ports.embedding import EmbeddingProvider
-from jesseagent.ports.transcript_index_repository import (
-    TranscriptIndexRepositoryError,
-    TranscriptIndexStatus,
 )
 
 

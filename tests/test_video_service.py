@@ -5,6 +5,22 @@ from typing import Any
 
 import pytest
 
+from jesseagent.application.video.contracts import (
+    SummaryProviderError,
+    TranscriptIndexStatus,
+    VisionProviderError,
+    VisionVectorIndexStatus,
+)
+from jesseagent.application.video.service import (
+    ChatUnavailableError,
+    InvalidVideoUrlError,
+    SummaryGenerationError,
+    SummaryUnavailableError,
+    VideoIngestionError,
+    VideoNotFoundError,
+    VideoService,
+)
+from jesseagent.application.video.stages import VisionIndexingStage
 from jesseagent.core.cache import LocalCacheManager
 from jesseagent.domain.retrieval import ChatAnswer, Citation, RetrievalHit
 from jesseagent.domain.summary import (
@@ -28,20 +44,6 @@ from jesseagent.pipeline.loader import (
 )
 from jesseagent.pipeline.loader import (
     VideoLoaderError,
-)
-from jesseagent.ports.summary import SummaryProviderError
-from jesseagent.ports.transcript_index_repository import TranscriptIndexStatus
-from jesseagent.ports.vision import VisionProviderError
-from jesseagent.ports.vision_index_repository import VisionVectorIndexStatus
-from jesseagent.services.stages import VisionIndexingStage
-from jesseagent.services.video_service import (
-    ChatUnavailableError,
-    InvalidVideoUrlError,
-    SummaryGenerationError,
-    SummaryUnavailableError,
-    VideoIngestionError,
-    VideoNotFoundError,
-    VideoService,
 )
 
 

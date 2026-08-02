@@ -1,7 +1,7 @@
 """Static contract test for the shared Agent-run trigger boundary."""
 
-from jesseagent.ports.agent_run_trigger import AgentRunTrigger
-from jesseagent.services.agent_run_service import AgentRunService
+from jesseagent.application.agent_runs.contracts import AgentRunTrigger
+from jesseagent.application.agent_runs.service import AgentRunService
 
 
 def _accept_trigger(_: AgentRunTrigger) -> None:

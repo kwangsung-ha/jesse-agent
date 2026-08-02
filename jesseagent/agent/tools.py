@@ -6,13 +6,13 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from jesseagent.agent.contracts import ToolCall, ToolResult
-from jesseagent.domain.video_status import VideoStatus
-from jesseagent.services.knowledge_search import KnowledgeSearchService
-from jesseagent.services.video_service import (
+from jesseagent.application.knowledge.search import KnowledgeSearchService
+from jesseagent.application.video.service import (
     ChatSession,
     VideoService,
     VideoServiceError,
 )
+from jesseagent.domain.video_status import VideoStatus
 
 
 class ProcessVideoInput(BaseModel):

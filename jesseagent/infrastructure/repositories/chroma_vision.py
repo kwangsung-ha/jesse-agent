@@ -9,17 +9,17 @@ from typing import Optional
 from chromadb.errors import ChromaError
 from pydantic import BaseModel, ConfigDict
 
+from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.video.contracts import (
+    VisionIndexRepositoryError,
+    VisionVectorIndexStatus,
+)
 from jesseagent.core.logging import logger
 from jesseagent.domain.retrieval import RetrievalHit
 from jesseagent.domain.state import CacheState
 from jesseagent.domain.vision import VisionScene
 from jesseagent.infrastructure.repositories.chroma_base import (
     ChromaVectorRepositoryBase,
-)
-from jesseagent.ports.embedding import EmbeddingProvider
-from jesseagent.ports.vision_index_repository import (
-    VisionIndexRepositoryError,
-    VisionVectorIndexStatus,
 )
 
 VISION_VECTOR_SCHEMA_VERSION = 1

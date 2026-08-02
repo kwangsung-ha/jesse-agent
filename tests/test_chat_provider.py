@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
+from jesseagent.application.video.contracts import ChatProviderError
 from jesseagent.domain.retrieval import RetrievalHit
 from jesseagent.infrastructure.chats.gemini import GeminiChatProvider
-from jesseagent.ports.chat import ChatProviderError
 
 
 def _evidence() -> tuple[RetrievalHit, ...]:

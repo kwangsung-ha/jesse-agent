@@ -5,11 +5,13 @@ from typing import Any
 import pytest
 
 from jesseagent.agent.retriever import HybridRetrievalError, HybridRetriever, _rrf_fuse
+from jesseagent.application.video.contracts import (
+    TranscriptIndexStatus,
+    VisionVectorIndexStatus,
+)
 from jesseagent.domain.retrieval import RetrievalHit
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
 from jesseagent.domain.vision import VisionScene
-from jesseagent.ports.transcript_index_repository import TranscriptIndexStatus
-from jesseagent.ports.vision_index_repository import VisionVectorIndexStatus
 
 
 def _hit(source_id: str, source: str, rank: int, start: float = 0) -> RetrievalHit:

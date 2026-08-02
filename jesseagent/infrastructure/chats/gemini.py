@@ -8,10 +8,10 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
+from jesseagent.application.video.contracts import ChatProviderError
 from jesseagent.core.logging import logger
 from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
 from jesseagent.domain.retrieval import ChatAnswer, ChatTurn, Citation, RetrievalHit
-from jesseagent.ports.chat import ChatProviderError
 
 
 class GeminiChatProvider:

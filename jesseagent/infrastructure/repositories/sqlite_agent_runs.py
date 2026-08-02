@@ -11,7 +11,7 @@ from jesseagent.agent.runs import (
     AgentRunEvent,
     NewAgentRunEvent,
 )
-from jesseagent.ports.agent_run_repository import (
+from jesseagent.application.agent_runs.contracts import (
     AgentRunNotFoundError,
     AgentRunRepositoryError,
 )

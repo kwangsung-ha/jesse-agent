@@ -4,7 +4,7 @@ from typing import Any
 
 from jesseagent.agent.contracts import ToolCall
 from jesseagent.agent.tools import VideoToolExecutor
-from jesseagent.services.knowledge_search import KnowledgeSearchService
+from jesseagent.application.knowledge.search import KnowledgeSearchService
 
 
 class Provider:

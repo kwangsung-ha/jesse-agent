@@ -4,8 +4,8 @@ from pathlib import Path
 
 import chromadb
 
+from jesseagent.application.embedding import EmbeddingProvider
 from jesseagent.domain.knowledge import KnowledgeChunk
-from jesseagent.ports.embedding import EmbeddingProvider
 
 
 class ChromaKnowledgeIndex:

@@ -7,6 +7,18 @@ from jesseagent.agent.contracts import ToolResult
 from jesseagent.agent.orchestrator import AgentSession
 from jesseagent.agent.runs import AgentRun
 from jesseagent.agent.tools import VideoToolExecutor
+from jesseagent.application.agent_runs.service import AgentRunService
+from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.knowledge.search import KnowledgeSearchService
+from jesseagent.application.knowledge.sync import KnowledgeSyncService
+from jesseagent.application.video.contracts import (
+    ChatProvider,
+    SummaryProvider,
+    TranscriptIndexRepository,
+    VisionAnalyzer,
+    VisionIndexRepository,
+)
+from jesseagent.application.video.service import VideoService
 from jesseagent.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from jesseagent.core.config import Settings, settings
 from jesseagent.domain.transcript_index import TranscriptChunkPolicy
@@ -29,16 +41,6 @@ from jesseagent.infrastructure.repositories.sqlite_knowledge import (
 from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider
 from jesseagent.infrastructure.visions.gemini import GeminiVisionAnalyzer
 from jesseagent.pipeline.loader import YouTubeLoader
-from jesseagent.ports.chat import ChatProvider
-from jesseagent.ports.embedding import EmbeddingProvider
-from jesseagent.ports.summary import SummaryProvider
-from jesseagent.ports.transcript_index_repository import TranscriptIndexRepository
-from jesseagent.ports.vision import VisionAnalyzer
-from jesseagent.ports.vision_index_repository import VisionIndexRepository
-from jesseagent.services.agent_run_service import AgentRunService
-from jesseagent.services.knowledge_search import KnowledgeSearchService
-from jesseagent.services.knowledge_sync import KnowledgeSyncService
-from jesseagent.services.video_service import VideoService
 from jesseagent.sources.obsidian import chunk_markdown
 
 

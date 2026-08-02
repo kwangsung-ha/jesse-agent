@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 from httpx import HTTPError
 
+from jesseagent.application.video.contracts import SummaryProviderError
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
 from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider, _timestamp
-from jesseagent.ports.summary import SummaryProviderError
 
 
 def _transcript() -> Transcript:

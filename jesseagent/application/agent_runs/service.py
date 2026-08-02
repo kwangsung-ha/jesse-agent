@@ -1,7 +1,6 @@
 """Application API for durable Agent-run lifecycle operations."""
 
 from collections.abc import Callable
-from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -9,12 +8,14 @@ from jesseagent.agent.orchestrator import AgentSession
 from jesseagent.agent.reducer import reduce_run
 from jesseagent.agent.runs import (
     AgentEventType,
-    AgentRun,
     AgentRunState,
     AgentRunStatus,
     NewAgentRunEvent,
 )
-from jesseagent.ports.agent_run_repository import AgentRunRepository
+from jesseagent.application.agent_runs.contracts import (
+    AgentRunRepository,
+    AgentSessionFactory,
+)
 from jesseagent.ports.sink import SinkApplyResult, SinkPlan
 
 
@@ -29,13 +30,6 @@ class AgentRunResult(BaseModel):
 
     state: AgentRunState
     response: str | None = None
-
-
-class AgentSessionFactory(Protocol):
-    """Create a new or an existing durable Agent session."""
-
-    def __call__(self, run: AgentRun | None = None) -> AgentSession:
-        """Return a session bound to the supplied run when resuming."""
 
 
 class AgentRunService:

@@ -2,20 +2,18 @@
 
 from collections.abc import Iterable
 
+from jesseagent.application.embedding import EmbeddingProvider, EmbeddingProviderError
+from jesseagent.application.video.contracts import (
+    TranscriptIndexRepository,
+    TranscriptIndexRepositoryError,
+    VisionIndexRepository,
+    VisionIndexRepositoryError,
+)
 from jesseagent.core.logging import logger
 from jesseagent.domain.retrieval import RetrievalHit
 from jesseagent.domain.state import CacheState
 from jesseagent.domain.transcript import Transcript
 from jesseagent.domain.vision import VisionScene
-from jesseagent.ports.embedding import EmbeddingProvider, EmbeddingProviderError
-from jesseagent.ports.transcript_index_repository import (
-    TranscriptIndexRepository,
-    TranscriptIndexRepositoryError,
-)
-from jesseagent.ports.vision_index_repository import (
-    VisionIndexRepository,
-    VisionIndexRepositoryError,
-)
 
 RRF_K = 60
 RETRIEVAL_LIMIT = 5

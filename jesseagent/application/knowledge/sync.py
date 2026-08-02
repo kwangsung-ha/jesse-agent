@@ -1,26 +1,15 @@
 """Incrementally synchronize source-neutral knowledge into local search stores."""
 
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable
 
+from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.knowledge.contracts import (
+    KnowledgeCatalog,
+    KnowledgeVectorIndex,
+)
 from jesseagent.domain.knowledge import KnowledgeChunk, KnowledgeDocument
-from jesseagent.ports.embedding import EmbeddingProvider
 from jesseagent.ports.source import SourceConnector
-
-
-class KnowledgeCatalog(Protocol):
-    def content_hashes(self, source_id: str) -> dict[str, str]: ...
-    def replace_document(
-        self, document: KnowledgeDocument, chunks: tuple[KnowledgeChunk, ...]
-    ) -> None: ...
-    def delete_documents(self, source_id: str, document_ids: set[str]) -> None: ...
-
-
-class KnowledgeVectorIndex(Protocol):
-    def replace_document(
-        self, chunks: tuple[KnowledgeChunk, ...], provider: EmbeddingProvider
-    ) -> None: ...
-    def delete_documents(self, document_ids: set[str]) -> None: ...
 
 
 @dataclass(frozen=True)

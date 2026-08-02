@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 
 from jesseagent.agent.runs import AgentEventType, AgentRun, NewAgentRunEvent
-from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
-    SQLiteAgentRunRepository,
-)
-from jesseagent.ports.agent_run_repository import (
+from jesseagent.application.agent_runs.contracts import (
     AgentRunNotFoundError,
     AgentRunRepositoryError,
+)
+from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
+    SQLiteAgentRunRepository,
 )
 
 

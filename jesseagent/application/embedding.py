@@ -1,4 +1,4 @@
-"""Embedding provider port."""
+"""Shared embedding contract used by video and knowledge workflows."""
 
 from typing import Protocol
 

@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from jesseagent.agent.runs import AgentEventType, AgentRun, NewAgentRunEvent
+from jesseagent.application.agent_runs.service import (
+    AgentRunService,
+    AgentRunTransitionError,
+)
 from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
     SQLiteAgentRunRepository,
 )
 from jesseagent.ports.sink import SinkApplyResult, SinkPlan
-from jesseagent.services.agent_run_service import (
-    AgentRunService,
-    AgentRunTransitionError,
-)
 
 
 class StubSession:

@@ -5,7 +5,7 @@ from typing import Any
 
 from jesseagent.agent.contracts import ToolCall
 from jesseagent.agent.tools import ProcessVideoInput, VideoToolExecutor
-from jesseagent.services.video_service import VideoNotFoundError
+from jesseagent.application.video.service import VideoNotFoundError
 
 
 def test_process_tool_calls_service_and_sets_current_video(mocker: Any) -> None:

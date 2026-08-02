@@ -8,6 +8,7 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
+from jesseagent.application.video.contracts import SummaryProviderError
 from jesseagent.core.logging import logger
 from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
 from jesseagent.domain.chaptering import (
@@ -21,7 +22,6 @@ from jesseagent.domain.chaptering import (
 )
 from jesseagent.domain.summary import Chapter, VideoSummary
 from jesseagent.domain.transcript import Transcript
-from jesseagent.ports.summary import SummaryProviderError
 
 
 class GeminiSummaryProvider:
