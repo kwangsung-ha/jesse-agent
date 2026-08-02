@@ -4,11 +4,11 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from jesseagent.sources.obsidian import (
+from jesseagent.application.knowledge.chunking import (
     ObsidianChunkPolicy,
-    ObsidianSourceConnector,
     chunk_markdown,
 )
+from jesseagent.sources.obsidian import ObsidianSourceConnector
 
 
 def _write(vault: Path, relative_path: str, content: str) -> Path:

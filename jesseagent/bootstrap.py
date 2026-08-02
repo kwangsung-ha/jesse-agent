@@ -9,6 +9,7 @@ from jesseagent.agent.runs import AgentRun
 from jesseagent.agent.tools import VideoToolExecutor
 from jesseagent.application.agent_runs.service import AgentRunService
 from jesseagent.application.embedding import EmbeddingProvider
+from jesseagent.application.knowledge.chunking import chunk_markdown
 from jesseagent.application.knowledge.search import KnowledgeSearchService
 from jesseagent.application.knowledge.sync import KnowledgeSyncService
 from jesseagent.application.video.contracts import (
@@ -41,7 +42,6 @@ from jesseagent.infrastructure.repositories.sqlite_knowledge import (
 from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider
 from jesseagent.infrastructure.visions.gemini import GeminiVisionAnalyzer
 from jesseagent.pipeline.loader import YouTubeLoader
-from jesseagent.sources.obsidian import chunk_markdown
 
 
 def create_video_service(config: Settings = settings) -> VideoService:

@@ -12,7 +12,7 @@ from jesseagent.application.agent_runs.service import (
 from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
     SQLiteAgentRunRepository,
 )
-from jesseagent.ports.sink import SinkApplyResult, SinkPlan
+from jesseagent.sinks.contracts import SinkApplyResult, SinkPlan
 
 
 class StubSession:

@@ -16,7 +16,7 @@ from jesseagent.application.agent_runs.contracts import (
     AgentRunRepository,
     AgentSessionFactory,
 )
-from jesseagent.ports.sink import SinkApplyResult, SinkPlan
+from jesseagent.sinks.contracts import SinkApplyResult, SinkPlan
 
 
 class AgentRunTransitionError(ValueError):

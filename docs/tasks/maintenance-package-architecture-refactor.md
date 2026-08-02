@@ -8,7 +8,7 @@ infrastructure adapter의 패키지 소유권을 명확하게 정리한다. 각 
 
 - [x] **Check A.1**: Move video, knowledge, and Agent-run use cases and their
   required contracts into a feature-local `application` layer.
-- [ ] **Check A.2**: Separate Source and Sink contracts and move pure knowledge
+- [x] **Check A.2**: Separate Source and Sink contracts and move pure knowledge
   chunking out of concrete adapters.
 - [ ] **Check A.3**: Consolidate concrete adapters under technology-oriented
   `infrastructure` packages and remove the obsolete `pipeline` package.

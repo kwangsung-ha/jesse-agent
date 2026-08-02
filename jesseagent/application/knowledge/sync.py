@@ -9,7 +9,7 @@ from jesseagent.application.knowledge.contracts import (
     KnowledgeVectorIndex,
 )
 from jesseagent.domain.knowledge import KnowledgeChunk, KnowledgeDocument
-from jesseagent.ports.source import SourceConnector
+from jesseagent.sources.contracts import SourceConnector
 
 
 @dataclass(frozen=True)
