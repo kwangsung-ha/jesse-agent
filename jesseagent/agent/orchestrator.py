@@ -7,7 +7,7 @@ from uuid import uuid4
 from pydantic import JsonValue
 
 from jesseagent.agent.context import AgentContextBudget, compact_messages
-from jesseagent.agent.contracts import AgentDecision, AgentMessage, ToolResult
+from jesseagent.agent.contracts import AgentDecision, AgentMessage
 from jesseagent.agent.reducer import model_messages, reduce_run
 from jesseagent.agent.runs import (
     AgentEventType,
@@ -15,9 +15,10 @@ from jesseagent.agent.runs import (
     AgentRunEvent,
     NewAgentRunEvent,
 )
-from jesseagent.agent.tools import VideoToolExecutor
 from jesseagent.application.agent_runs.contracts import AgentRunRepository
 from jesseagent.core.logging import logger
+from jesseagent.tools.contracts import ToolResult
+from jesseagent.tools.executor import ToolExecutor
 
 
 class AgentModelError(Exception):
@@ -42,7 +43,7 @@ class AgentSession:
     def __init__(
         self,
         model: AgentModel,
-        tools: VideoToolExecutor,
+        tools: ToolExecutor,
         max_steps: int,
         on_tool_result: Callable[[ToolResult], None] | None = None,
         repository: AgentRunRepository | None = None,

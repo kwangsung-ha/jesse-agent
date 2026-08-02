@@ -12,7 +12,7 @@ infrastructure adapter의 패키지 소유권을 명확하게 정리한다. 각 
   chunking out of concrete adapters.
 - [x] **Check A.3**: Consolidate concrete adapters under technology-oriented
   `infrastructure` packages and remove the obsolete `pipeline` package.
-- [ ] **Check A.4**: Split Agent tool handlers from the central executor while
+- [x] **Check A.4**: Split Agent tool handlers from the central executor while
   preserving tool names, schemas, approval behavior, and result payloads.
 - [ ] **Check A.5**: Reorganize prompts by Agent and video application use case,
   then update architecture documentation and remove obsolete packages.

@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from jesseagent.agent.contracts import AgentDecision, ToolCall, ToolResult
+from jesseagent.agent.contracts import AgentDecision
 from jesseagent.agent.orchestrator import AgentSession
 from jesseagent.agent.reducer import AgentRunReductionError, model_messages, reduce_run
 from jesseagent.agent.runs import (
@@ -17,6 +17,7 @@ from jesseagent.agent.runs import (
 from jesseagent.infrastructure.sqlite.agent_runs import (
     SQLiteAgentRunRepository,
 )
+from jesseagent.tools.contracts import ToolCall, ToolResult
 
 
 class StubTools:

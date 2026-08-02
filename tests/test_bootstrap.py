@@ -67,7 +67,7 @@ def test_create_agent_session_wires_configured_model_and_tools(
     tmp_path: Path, mocker: Any
 ) -> None:
     agent_model = mocker.patch("jesseagent.bootstrap.GeminiAgentModel")
-    executor = mocker.patch("jesseagent.bootstrap.VideoToolExecutor")
+    executor = mocker.patch("jesseagent.bootstrap.ToolExecutor")
     config = Settings(data_dir=tmp_path, gemini_api_key="key", agent_max_steps=3)
 
     session = create_agent_session(config)

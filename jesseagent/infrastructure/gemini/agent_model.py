@@ -7,9 +7,10 @@ from google.genai import types
 from google.genai.errors import APIError
 from httpx import HTTPError
 
-from jesseagent.agent.contracts import AgentDecision, AgentMessage, ToolCall
+from jesseagent.agent.contracts import AgentDecision, AgentMessage
 from jesseagent.agent.orchestrator import AgentModelError
 from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
+from jesseagent.tools.contracts import ToolCall
 
 
 class GeminiAgentModel:

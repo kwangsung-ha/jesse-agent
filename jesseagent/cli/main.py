@@ -5,7 +5,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from jesseagent.agent.contracts import ToolResult
 from jesseagent.bootstrap import create_agent_session, create_knowledge_sync_service
 from jesseagent.cli.runs import (
     approve,
@@ -20,6 +19,7 @@ from jesseagent.cli.runs import (
 from jesseagent.core.config import settings
 from jesseagent.core.logging import configure_debug_logging
 from jesseagent.infrastructure.obsidian.source import ObsidianSourceConnector
+from jesseagent.tools.contracts import ToolResult
 
 app = typer.Typer(
     name="jesseagent",

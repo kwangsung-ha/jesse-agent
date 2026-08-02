@@ -1,9 +1,10 @@
-"""Typed contracts shared by the Agent loop and its deterministic tools."""
+"""Typed contracts used by the Agent model loop."""
 
-from typing import Any, Literal
-from uuid import uuid4
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
+
+from jesseagent.tools.contracts import ToolCall
 
 
 class AgentMessage(BaseModel):
@@ -15,16 +16,6 @@ class AgentMessage(BaseModel):
     content: str
 
 
-class ToolCall(BaseModel):
-    """A model-proposed call that must be validated before execution."""
-
-    model_config = ConfigDict(frozen=True)
-
-    name: str
-    call_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
-    arguments: dict[str, Any] = Field(default_factory=dict)
-
-
 class AgentDecision(BaseModel):
     """The next model action: one or more tools, or a final response."""
 
@@ -32,17 +23,3 @@ class AgentDecision(BaseModel):
 
     text: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
-
-
-class ToolResult(BaseModel):
-    """JSON-safe result returned to the Agent after deterministic execution."""
-
-    model_config = ConfigDict(frozen=True)
-
-    name: str
-    ok: bool
-    content: dict[str, Any]
-    call_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1)
-    error_code: str | None = None
-    user_summary: str = ""
-    next_action: str | None = None

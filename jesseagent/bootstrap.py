@@ -3,10 +3,8 @@
 from collections.abc import Callable
 
 from jesseagent.agent.context import AgentContextBudget
-from jesseagent.agent.contracts import ToolResult
 from jesseagent.agent.orchestrator import AgentSession
 from jesseagent.agent.runs import AgentRun
-from jesseagent.agent.tools import VideoToolExecutor
 from jesseagent.application.agent_runs.service import AgentRunService
 from jesseagent.application.embedding import EmbeddingProvider
 from jesseagent.application.knowledge.chunking import chunk_markdown
@@ -45,6 +43,8 @@ from jesseagent.infrastructure.sqlite.knowledge import (
     SQLiteKnowledgeCatalog,
 )
 from jesseagent.infrastructure.youtube.loader import YouTubeLoader
+from jesseagent.tools.contracts import ToolResult
+from jesseagent.tools.executor import ToolExecutor
 
 
 def create_video_service(config: Settings = settings) -> VideoService:
@@ -92,7 +92,7 @@ def create_agent_session(
             model=config.llm_model,
             prompt_version=config.agent_prompt_version,
         ),
-        tools=VideoToolExecutor(
+        tools=ToolExecutor(
             create_video_service(config), create_knowledge_search_service(config)
         ),
         max_steps=config.agent_max_steps,
@@ -114,7 +114,7 @@ def create_agent_run_service(config: Settings = settings) -> AgentRunService:
             model=GeminiAgentModel(
                 config.gemini_api_key, config.llm_model, config.agent_prompt_version
             ),
-            tools=VideoToolExecutor(
+            tools=ToolExecutor(
                 create_video_service(config), create_knowledge_search_service(config)
             ),
             max_steps=config.agent_max_steps,

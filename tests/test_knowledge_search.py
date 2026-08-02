@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from jesseagent.agent.contracts import ToolCall
-from jesseagent.agent.tools import VideoToolExecutor
 from jesseagent.application.knowledge.search import KnowledgeSearchService
+from jesseagent.tools.contracts import ToolCall
+from jesseagent.tools.executor import ToolExecutor
 
 
 class Provider:
@@ -53,7 +53,7 @@ def test_knowledge_search_rrf_preserves_obsidian_uri_evidence() -> None:
 def test_search_knowledge_tool_returns_registered_evidence(mocker: Any) -> None:
     search = mocker.Mock()
     search.search.return_value = [{"chunk_id": "obsidian:note:chunk:0"}]
-    executor = VideoToolExecutor(mocker.Mock(), search)
+    executor = ToolExecutor(mocker.Mock(), search)
 
     result = executor.execute(
         ToolCall(name="search_knowledge", arguments={"query": "식단"})

@@ -3,9 +3,10 @@
 from types import SimpleNamespace
 from typing import Any
 
-from jesseagent.agent.contracts import ToolCall
-from jesseagent.agent.tools import ProcessVideoInput, VideoToolExecutor
 from jesseagent.application.video.service import VideoNotFoundError
+from jesseagent.tools.contracts import ToolCall
+from jesseagent.tools.executor import ToolExecutor
+from jesseagent.tools.video import ProcessVideoInput, VideoTools
 
 
 def test_process_tool_calls_service_and_sets_current_video(mocker: Any) -> None:
@@ -18,9 +19,9 @@ def test_process_tool_calls_service_and_sets_current_video(mocker: Any) -> None:
         summary=SimpleNamespace(state="generated"),
         vision=SimpleNamespace(state="generated"),
     )
-    tools = VideoToolExecutor(service)
+    tools = VideoTools(service)
 
-    result = tools._process_video(ProcessVideoInput(url="https://youtu.be/video1"))
+    result = tools.process_video(ProcessVideoInput(url="https://youtu.be/video1"))
 
     assert result["video_id"] == "video1"
     assert tools.current_video_id == "video1"
@@ -32,7 +33,7 @@ def test_tool_validation_and_service_errors_are_returned_as_context(
 ) -> None:
     service = mocker.Mock()
     service.get_status.side_effect = VideoNotFoundError("missing")
-    tools = VideoToolExecutor(service)
+    tools = ToolExecutor(service)
 
     invalid = tools.execute(ToolCall(name="get_video_status", arguments={}))
     missing = tools.execute(
@@ -52,7 +53,7 @@ def test_tool_validation_and_service_errors_are_returned_as_context(
 def test_tool_declarations_expose_bounded_video_and_knowledge_operations(
     mocker: Any,
 ) -> None:
-    tools = VideoToolExecutor(mocker.Mock())
+    tools = ToolExecutor(mocker.Mock())
 
     names = {item["name"] for item in tools.declarations}
 
@@ -104,7 +105,7 @@ def test_list_status_summary_and_question_tools_return_service_data(
         SimpleNamespace(source_id="source", source="transcript", text="근거"),
     )
     service.create_chat_session.return_value = chat_session
-    tools = VideoToolExecutor(service)
+    tools = ToolExecutor(service)
 
     listed = tools.execute(ToolCall(name="list_videos"))
     detail = tools.execute(
@@ -122,6 +123,7 @@ def test_list_status_summary_and_question_tools_return_service_data(
 
     assert listed.content["videos"][0]["title"] == "Title"
     assert detail.content["video"]["video_id"] == "video1"
+    assert tools.current_video_id == "video1"
     assert summary.content["chapters"] == [{"start_sec": 0}]
     assert answer.content["citations"][0]["evidence"] == "근거"
     service.get_summary.assert_called_once_with("video1", generate=False)
@@ -130,7 +132,7 @@ def test_list_status_summary_and_question_tools_return_service_data(
 def test_costly_tools_require_approval_before_service_execution(mocker: Any) -> None:
     """Generation and processing cannot bypass the explicit approval policy."""
     service = mocker.Mock()
-    tools = VideoToolExecutor(service)
+    tools = ToolExecutor(service)
 
     result = tools.execute(
         ToolCall(name="process_video", arguments={"url": "https://x"})
@@ -138,3 +140,33 @@ def test_costly_tools_require_approval_before_service_execution(mocker: Any) -> 
 
     assert result.error_code == "approval_required"
     service.process.assert_not_called()
+
+
+def test_request_approval_accepts_only_operations_with_side_effect_policy(
+    mocker: Any,
+) -> None:
+    tools = ToolExecutor(mocker.Mock())
+
+    approved = tools.execute(
+        ToolCall(
+            name="request_approval",
+            arguments={
+                "tool_name": "process_video",
+                "arguments": {"url": "https://x"},
+            },
+        )
+    )
+    unnecessary = tools.execute(
+        ToolCall(
+            name="request_approval",
+            arguments={"tool_name": "list_videos", "arguments": {}},
+        )
+    )
+
+    assert approved.ok is True
+    assert approved.content == {
+        "tool_name": "process_video",
+        "arguments": {"url": "https://x"},
+    }
+    assert unnecessary.ok is False
+    assert unnecessary.content["error"] == "This operation does not require approval"
