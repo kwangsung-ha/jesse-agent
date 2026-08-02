@@ -11,6 +11,8 @@ from jesseagent.application.video.contracts import (
     SummaryProviderError,
     TranscriptIndexRepository,
     TranscriptIndexRepositoryError,
+    VideoCache,
+    VideoLoader,
     VisionAnalyzer,
     VisionIndexRepository,
     VisionIndexRepositoryError,
@@ -22,7 +24,6 @@ from jesseagent.application.video.results import (
     SummaryResult,
     VisionResult,
 )
-from jesseagent.core.cache import LocalCacheManager
 from jesseagent.domain.state import CacheState, SyncState
 from jesseagent.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
@@ -39,7 +40,6 @@ from jesseagent.domain.vision import (
     VisionScene,
     YouTubeUrlVisionSource,
 )
-from jesseagent.pipeline.loader import YouTubeLoader
 
 
 class IngestionResult(BaseModel):
@@ -55,7 +55,7 @@ class IngestionResult(BaseModel):
 class VideoIngestionStage:
     """Own cache lookup and the external collection boundary."""
 
-    def __init__(self, cache: LocalCacheManager, loader: YouTubeLoader) -> None:
+    def __init__(self, cache: VideoCache, loader: VideoLoader) -> None:
         self._cache = cache
         self._loader = loader
 
@@ -117,7 +117,7 @@ class SummaryGenerationStage:
 
     def __init__(
         self,
-        cache: LocalCacheManager,
+        cache: VideoCache,
         provider_factory: Callable[[], SummaryProvider],
         model: str,
         prompt_version: str,
@@ -181,7 +181,7 @@ class VisionIndexingStage:
 
     def __init__(
         self,
-        cache: LocalCacheManager,
+        cache: VideoCache,
         analyzer_factory: Callable[[], VisionAnalyzer],
         repository_factory: Callable[[str], VisionIndexRepository],
         embedding_provider_factory: Callable[[], EmbeddingProvider],

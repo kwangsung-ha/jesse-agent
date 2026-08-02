@@ -8,7 +8,7 @@ from httpx import HTTPError
 
 from jesseagent.application.video.contracts import SummaryProviderError
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
-from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider, _timestamp
+from jesseagent.infrastructure.gemini.summary import GeminiSummaryProvider, _timestamp
 
 
 def _transcript() -> Transcript:

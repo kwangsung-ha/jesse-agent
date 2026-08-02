@@ -10,7 +10,7 @@ from jesseagent.core import logging as logging_config
 from jesseagent.core.logging import configure_debug_logging
 from jesseagent.core.prompts import PromptCatalog, PromptTemplateError
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
-from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider
+from jesseagent.infrastructure.gemini.summary import GeminiSummaryProvider
 
 
 def test_prompt_catalog_renders_versioned_summary_template() -> None:

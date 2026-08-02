@@ -20,28 +20,31 @@ from jesseagent.application.video.contracts import (
     VisionIndexRepository,
 )
 from jesseagent.application.video.service import VideoService
-from jesseagent.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from jesseagent.core.config import Settings, settings
 from jesseagent.domain.transcript_index import TranscriptChunkPolicy
-from jesseagent.infrastructure.agents.gemini import GeminiAgentModel
-from jesseagent.infrastructure.chats.gemini import GeminiChatProvider
-from jesseagent.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
-from jesseagent.infrastructure.repositories.chroma_knowledge import ChromaKnowledgeIndex
-from jesseagent.infrastructure.repositories.chroma_transcript import (
+from jesseagent.infrastructure.chroma.knowledge import ChromaKnowledgeIndex
+from jesseagent.infrastructure.chroma.transcript import (
     ChromaTranscriptIndexRepository,
 )
-from jesseagent.infrastructure.repositories.chroma_vision import (
+from jesseagent.infrastructure.chroma.vision import (
     ChromaVisionIndexRepository,
 )
-from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
+from jesseagent.infrastructure.gemini.agent_model import GeminiAgentModel
+from jesseagent.infrastructure.gemini.chat import GeminiChatProvider
+from jesseagent.infrastructure.gemini.embedding import GeminiEmbeddingProvider
+from jesseagent.infrastructure.gemini.summary import GeminiSummaryProvider
+from jesseagent.infrastructure.gemini.vision import GeminiVisionAnalyzer
+from jesseagent.infrastructure.local.video_cache import (
+    CacheFreshnessPolicy,
+    LocalCacheManager,
+)
+from jesseagent.infrastructure.sqlite.agent_runs import (
     SQLiteAgentRunRepository,
 )
-from jesseagent.infrastructure.repositories.sqlite_knowledge import (
+from jesseagent.infrastructure.sqlite.knowledge import (
     SQLiteKnowledgeCatalog,
 )
-from jesseagent.infrastructure.summaries.gemini import GeminiSummaryProvider
-from jesseagent.infrastructure.visions.gemini import GeminiVisionAnalyzer
-from jesseagent.pipeline.loader import YouTubeLoader
+from jesseagent.infrastructure.youtube.loader import YouTubeLoader
 
 
 def create_video_service(config: Settings = settings) -> VideoService:

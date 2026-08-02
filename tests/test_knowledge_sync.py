@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jesseagent.application.knowledge.sync import KnowledgeSyncService
 from jesseagent.domain.knowledge import KnowledgeChunk, KnowledgeDocument
-from jesseagent.infrastructure.repositories.sqlite_knowledge import (
+from jesseagent.infrastructure.sqlite.knowledge import (
     SQLiteKnowledgeCatalog,
 )
 

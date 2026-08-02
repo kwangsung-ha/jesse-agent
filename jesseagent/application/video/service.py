@@ -12,8 +12,14 @@ from jesseagent.application.video.contracts import (
     TranscriptIndexRepository,
     TranscriptIndexRepositoryError,
     TranscriptIndexStatus,
+    VideoCache,
+    VideoLoader,
+    VideoLoaderError,
     VisionAnalyzer,
     VisionIndexRepository,
+)
+from jesseagent.application.video.contracts import (
+    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
 )
 from jesseagent.application.video.results import (
     ProcessResult,
@@ -26,7 +32,6 @@ from jesseagent.application.video.stages import (
     VideoIngestionStage,
     VisionIndexingStage,
 )
-from jesseagent.core.cache import LocalCacheManager
 from jesseagent.core.logging import logger
 from jesseagent.domain.chaptering import ChapterBlockPolicy, ChapterWindowPolicy
 from jesseagent.domain.retrieval import ChatAnswer, ChatTurn, RetrievalHit
@@ -35,13 +40,6 @@ from jesseagent.domain.transcript import Transcript
 from jesseagent.domain.video import CachedVideo
 from jesseagent.domain.video_status import VideoStatus
 from jesseagent.domain.vision import VisionScene
-from jesseagent.pipeline.loader import (
-    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
-)
-from jesseagent.pipeline.loader import (
-    VideoLoaderError,
-    YouTubeLoader,
-)
 
 
 class VideoServiceError(Exception):
@@ -120,8 +118,8 @@ class VideoService:
 
     def __init__(
         self,
-        cache: LocalCacheManager,
-        loader: YouTubeLoader,
+        cache: VideoCache,
+        loader: VideoLoader,
         embedding_provider_factory: Callable[[], EmbeddingProvider],
         transcript_index_repository_factory: Callable[[str], TranscriptIndexRepository],
         summary_provider_factory: Callable[[], SummaryProvider],

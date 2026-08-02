@@ -1,4 +1,4 @@
-"""Local cache manager for JesseAgent video data."""
+"""Local filesystem cache for JesseAgent video data."""
 
 import hashlib
 import json

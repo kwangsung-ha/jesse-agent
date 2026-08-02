@@ -15,10 +15,10 @@ from jesseagent.domain.transcript_index import (
     chunk_transcript,
     format_document,
 )
-from jesseagent.infrastructure.embeddings.gemini import GeminiEmbeddingProvider
-from jesseagent.infrastructure.repositories.chroma_transcript import (
+from jesseagent.infrastructure.chroma.transcript import (
     ChromaTranscriptIndexRepository,
 )
+from jesseagent.infrastructure.gemini.embedding import GeminiEmbeddingProvider
 
 
 class FakeEmbeddingProvider:
@@ -53,7 +53,7 @@ def _make_store(
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     persistent_client = mocker.patch(
-        "jesseagent.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
+        "jesseagent.infrastructure.chroma.base.chromadb.PersistentClient",
         return_value=client,
     )
 
@@ -181,7 +181,7 @@ def test_failed_generation_keeps_previous_transcript_index_active(
     store, client, collection = _make_store(tmp_path, mocker)
     store.manifest_path.write_text('{"collection_name": "transcript_collection"}')
     mocker.patch(
-        "jesseagent.infrastructure.repositories.chroma_base.os.replace",
+        "jesseagent.infrastructure.chroma.base.os.replace",
         side_effect=OSError("write failed"),
     )
 

@@ -1,1 +1,0 @@
-"""Concrete summary-provider adapters."""

@@ -7,7 +7,7 @@ import pytest
 
 from jesseagent.application.video.contracts import VisionProviderError
 from jesseagent.domain.vision import VisionScene, VisionSource, YouTubeUrlVisionSource
-from jesseagent.infrastructure.visions.gemini import (
+from jesseagent.infrastructure.gemini.vision import (
     GeminiVisionAnalyzer,
 )
 

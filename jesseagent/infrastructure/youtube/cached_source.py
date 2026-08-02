@@ -1,6 +1,6 @@
 """Expose cached YouTube transcripts as source-neutral knowledge documents."""
 
-from jesseagent.core.cache import LocalCacheManager
+from jesseagent.application.video.contracts import VideoCache
 from jesseagent.domain.knowledge import KnowledgeDocument
 from jesseagent.domain.video import CachedVideo
 
@@ -10,7 +10,7 @@ class YouTubeSourceConnector:
 
     source_id = "youtube"
 
-    def __init__(self, cache: LocalCacheManager) -> None:
+    def __init__(self, cache: VideoCache) -> None:
         self._cache = cache
 
     def list_documents(self) -> tuple[KnowledgeDocument, ...]:

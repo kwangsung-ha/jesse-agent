@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 
-from jesseagent.core.cache import CacheFreshnessPolicy, LocalCacheManager
 from jesseagent.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
     Chapter,
@@ -23,6 +22,10 @@ from jesseagent.domain.vision import (
     VisionIndexEntry,
     VisionManifest,
     VisionScene,
+)
+from jesseagent.infrastructure.local.video_cache import (
+    CacheFreshnessPolicy,
+    LocalCacheManager,
 )
 
 # ------------------------------------------------------------------
@@ -103,7 +106,10 @@ def test_save_json_preserves_existing_cache_when_atomic_replace_fails(
     """A failed replacement must leave a complete prior JSON cache untouched."""
     cache = LocalCacheManager(data_dir=tmp_path)
     cache.save_json("vid1", "metadata.json", {"title": "previous"})
-    mocker.patch("jesseagent.core.cache.os.replace", side_effect=OSError("disk full"))
+    mocker.patch(
+        "jesseagent.infrastructure.local.video_cache.os.replace",
+        side_effect=OSError("disk full"),
+    )
 
     with pytest.raises(OSError, match="disk full"):
         cache.save_json("vid1", "metadata.json", {"title": "replacement"})

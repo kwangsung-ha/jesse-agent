@@ -1,1 +1,0 @@
-"""Answer-generation infrastructure adapters."""

@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from jesseagent.core.cache import LocalCacheManager
 from jesseagent.domain.knowledge import KnowledgeDocument
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
 from jesseagent.domain.video import CachedVideo, VideoMetadata
-from jesseagent.sources.youtube import YouTubeSourceConnector
+from jesseagent.infrastructure.local.video_cache import LocalCacheManager
+from jesseagent.infrastructure.youtube.cached_source import YouTubeSourceConnector
 
 
 def _video(video_id: str, text: str = "첫 번째 문장") -> CachedVideo:

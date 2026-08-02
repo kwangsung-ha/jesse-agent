@@ -10,7 +10,7 @@ from jesseagent.application.agent_runs.contracts import (
     AgentRunNotFoundError,
     AgentRunRepositoryError,
 )
-from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
+from jesseagent.infrastructure.sqlite.agent_runs import (
     SQLiteAgentRunRepository,
 )
 

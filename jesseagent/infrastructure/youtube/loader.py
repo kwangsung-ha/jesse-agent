@@ -8,6 +8,10 @@ from typing import Any, Optional
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import YouTubeTranscriptApiException
 
+from jesseagent.application.video.contracts import (
+    InvalidVideoUrlError,
+    VideoLoaderError,
+)
 from jesseagent.core.logging import logger
 from jesseagent.domain.transcript import Transcript, TranscriptSegment
 from jesseagent.domain.video import VideoMetadata
@@ -21,14 +25,6 @@ _YOUTUBE_RE = re.compile(
     r"|youtu\.be/)"
     r"(?P<id>[A-Za-z0-9_-]{11})"
 )
-
-
-class VideoLoaderError(Exception):
-    """Raised when a YouTube adapter cannot collect video resources."""
-
-
-class InvalidVideoUrlError(VideoLoaderError, ValueError):
-    """Raised when a URL does not identify a supported YouTube video."""
 
 
 class YouTubeLoader:

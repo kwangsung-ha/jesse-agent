@@ -14,7 +14,7 @@ from jesseagent.agent.runs import (
     AgentRunEvent,
     NewAgentRunEvent,
 )
-from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
+from jesseagent.infrastructure.sqlite.agent_runs import (
     SQLiteAgentRunRepository,
 )
 

@@ -9,7 +9,7 @@ from jesseagent.application.agent_runs.service import (
     AgentRunService,
     AgentRunTransitionError,
 )
-from jesseagent.infrastructure.repositories.sqlite_agent_runs import (
+from jesseagent.infrastructure.sqlite.agent_runs import (
     SQLiteAgentRunRepository,
 )
 from jesseagent.sinks.contracts import SinkApplyResult, SinkPlan

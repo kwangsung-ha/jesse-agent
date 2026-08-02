@@ -19,7 +19,7 @@ from jesseagent.cli.runs import (
 )
 from jesseagent.core.config import settings
 from jesseagent.core.logging import configure_debug_logging
-from jesseagent.sources.obsidian import ObsidianSourceConnector
+from jesseagent.infrastructure.obsidian.source import ObsidianSourceConnector
 
 app = typer.Typer(
     name="jesseagent",

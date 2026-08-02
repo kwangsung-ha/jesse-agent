@@ -6,8 +6,12 @@ from typing import Any
 import pytest
 
 from jesseagent.application.video.contracts import (
+    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
+)
+from jesseagent.application.video.contracts import (
     SummaryProviderError,
     TranscriptIndexStatus,
+    VideoLoaderError,
     VisionProviderError,
     VisionVectorIndexStatus,
 )
@@ -21,7 +25,6 @@ from jesseagent.application.video.service import (
     VideoService,
 )
 from jesseagent.application.video.stages import VisionIndexingStage
-from jesseagent.core.cache import LocalCacheManager
 from jesseagent.domain.retrieval import ChatAnswer, Citation, RetrievalHit
 from jesseagent.domain.summary import (
     SUMMARY_SCHEMA_VERSION,
@@ -39,12 +42,7 @@ from jesseagent.domain.vision import (
     VisionManifest,
     VisionScene,
 )
-from jesseagent.pipeline.loader import (
-    InvalidVideoUrlError as LoaderInvalidVideoUrlError,
-)
-from jesseagent.pipeline.loader import (
-    VideoLoaderError,
-)
+from jesseagent.infrastructure.local.video_cache import LocalCacheManager
 
 
 def _service(tmp_path: Path, mocker: Any) -> tuple[VideoService, Any, Any, Any, Any]:

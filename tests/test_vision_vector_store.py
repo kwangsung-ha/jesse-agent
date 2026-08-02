@@ -8,7 +8,7 @@ import pytest
 
 from jesseagent.application.video.contracts import VisionIndexRepositoryError
 from jesseagent.domain.vision import VisionScene
-from jesseagent.infrastructure.repositories.chroma_vision import (
+from jesseagent.infrastructure.chroma.vision import (
     ChromaVisionIndexRepository,
     format_scene_document,
 )
@@ -36,7 +36,7 @@ def _make_store(
     client = mocker.Mock()
     client.get_or_create_collection.return_value = collection
     mocker.patch(
-        "jesseagent.infrastructure.repositories.chroma_base.chromadb.PersistentClient",
+        "jesseagent.infrastructure.chroma.base.chromadb.PersistentClient",
         return_value=client,
     )
     store = ChromaVisionIndexRepository(

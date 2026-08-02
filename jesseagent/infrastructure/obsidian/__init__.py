@@ -1,0 +1,1 @@
+"""Obsidian filesystem source adapters."""

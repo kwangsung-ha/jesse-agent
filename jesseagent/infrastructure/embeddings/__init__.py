@@ -1,1 +1,0 @@
-"""Concrete embedding provider adapters."""

@@ -8,7 +8,7 @@ from jesseagent.application.knowledge.chunking import (
     ObsidianChunkPolicy,
     chunk_markdown,
 )
-from jesseagent.sources.obsidian import ObsidianSourceConnector
+from jesseagent.infrastructure.obsidian.source import ObsidianSourceConnector
 
 
 def _write(vault: Path, relative_path: str, content: str) -> Path:

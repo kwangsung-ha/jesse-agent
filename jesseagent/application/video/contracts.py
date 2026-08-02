@@ -9,9 +9,79 @@ from pydantic import BaseModel, ConfigDict
 from jesseagent.application.embedding import EmbeddingProvider
 from jesseagent.domain.retrieval import ChatAnswer, ChatTurn, RetrievalHit
 from jesseagent.domain.state import CacheState
-from jesseagent.domain.summary import VideoSummary
+from jesseagent.domain.summary import (
+    SummaryCacheEntry,
+    SummaryCacheStatus,
+    VideoSummary,
+)
 from jesseagent.domain.transcript import Transcript
-from jesseagent.domain.vision import VisionScene, VisionSource
+from jesseagent.domain.video import CachedVideo, VideoMetadata
+from jesseagent.domain.video_status import VideoStatus
+from jesseagent.domain.vision import (
+    VisionIndexEntry,
+    VisionIndexStatus,
+    VisionScene,
+    VisionSource,
+)
+
+
+class VideoLoaderError(Exception):
+    """Raised when a video source cannot collect the requested resources."""
+
+
+class InvalidVideoUrlError(VideoLoaderError, ValueError):
+    """Raised when a URL does not identify a supported video."""
+
+
+class VideoLoader(Protocol):
+    """Resolve a video URL and collect its source metadata and transcript."""
+
+    def extract_video_id(self, url: str) -> str: ...
+
+    def fetch_transcript(
+        self, video_id: str, languages: Optional[list[str]] = None
+    ) -> Transcript: ...
+
+    def fetch_metadata(self, video_id: str, url: str) -> VideoMetadata: ...
+
+
+class VideoCache(Protocol):
+    """Persist source videos and derived artifacts for the video workflow."""
+
+    def has_cache(self, video_id: str) -> bool: ...
+
+    def save_video(self, video: CachedVideo) -> None: ...
+
+    def load_video(self, video_id: str) -> CachedVideo: ...
+
+    def save_summary(self, video_id: str, entry: SummaryCacheEntry) -> None: ...
+
+    def get_summary_status(
+        self,
+        video_id: str,
+        transcript: Transcript,
+        *,
+        model: str,
+        prompt_version: str,
+        language: str,
+        chapter_window_policy: str | None = None,
+        chapter_block_policy: str | None = None,
+    ) -> SummaryCacheStatus: ...
+
+    def save_vision_index(self, video_id: str, entry: VisionIndexEntry) -> None: ...
+
+    def get_vision_index_status(
+        self,
+        video_id: str,
+        *,
+        source_url: str,
+        model: str,
+        prompt_version: str,
+    ) -> VisionIndexStatus: ...
+
+    def list_cached_videos(self) -> list[VideoStatus]: ...
+
+    def get_video_status(self, video_id: str) -> Optional[VideoStatus]: ...
 
 
 class ChatProviderError(Exception):

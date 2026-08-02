@@ -7,7 +7,7 @@ import pytest
 
 from jesseagent.application.video.contracts import ChatProviderError
 from jesseagent.domain.retrieval import RetrievalHit
-from jesseagent.infrastructure.chats.gemini import GeminiChatProvider
+from jesseagent.infrastructure.gemini.chat import GeminiChatProvider
 
 
 def _evidence() -> tuple[RetrievalHit, ...]:
